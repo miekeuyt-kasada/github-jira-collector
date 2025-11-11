@@ -1,0 +1,85 @@
+#!/bin/bash
+# Query GitHub data from database for a specific date range
+# Usage: ./query_month_data.sh <username> <start_date> <end_date>
+# Example: ./query_month_data.sh miekeuyt-kasada 2025-07-01 2025-08-01
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+CACHE_DIR="$SCRIPT_DIR/../.cache"
+DB_PATH="$CACHE_DIR/github_report.db"
+
+if [ ! -f "$DB_PATH" ]; then
+  echo "Error: Database not found at $DB_PATH" >&2
+  echo "Run ./db_init.sh first" >&2
+  exit 1
+fi
+
+USERNAME=${1:-"ADD_USER"}
+DATE_START=$(echo "$2" | tr '/' '-')
+DATE_END=$(echo "$3" | tr '/' '-')
+
+if [ -z "$DATE_START" ] || [ -z "$DATE_END" ]; then
+  echo "Usage: $0 <username> <start_date> <end_date>" >&2
+  exit 1
+fi
+
+# Query PRs and their commits and output as clean JSON
+sqlite3 "$DB_PATH" <<EOF | jq -r '.[0].result'
+.mode json
+SELECT json_object(
+  'prs', (
+    SELECT json_group_array(
+      json_object(
+        'pr_number', pr_number,
+        'repo', repo,
+        'title', title,
+        'description', description,
+        'state', state,
+        'merged_at', merged_at,
+        'closed_at', closed_at,
+        'created_at', created_at,
+        'jira_ticket', jira_ticket,
+        'first_commit_date', first_commit_date,
+        'last_commit_date', last_commit_date,
+        'commits', (
+          SELECT json_group_array(
+            json_object(
+              'sha', sha,
+              'message', message,
+              'date', date,
+              'author', author
+            )
+          )
+          FROM pr_commits pc
+          WHERE pc.repo = prs.repo 
+            AND pc.pr_number = prs.pr_number
+          ORDER BY pc.date ASC
+        )
+      )
+    )
+    FROM prs
+    WHERE (
+      (merged_at >= '$DATE_START' AND merged_at < '$DATE_END')
+      OR (closed_at >= '$DATE_START' AND closed_at < '$DATE_END' AND merged_at IS NULL)
+    )
+  ),
+  'direct_commits', (
+    SELECT json_group_array(
+      json_object(
+        'sha', sha,
+        'repo', repo,
+        'message', message,
+        'date', date,
+        'author', author
+      )
+    )
+    FROM direct_commits
+    WHERE date >= '$DATE_START' 
+      AND date < '$DATE_END'
+      AND author = '$USERNAME'
+    ORDER BY date ASC
+  )
+) as result;
+EOF
+
