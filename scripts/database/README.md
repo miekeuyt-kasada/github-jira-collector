@@ -1,168 +1,99 @@
-# Brag Doc Items Database
+# Brag Doc Database
 
-SQLite database for persisting interpreted brag doc items.
+Postgres database for persisting brag doc items. Uses a Postgres-first architecture — items are written directly to Postgres during the pipeline.
 
-## Database Location
+## Prerequisites
 
-`github-summary/scripts/.cache/bragdoc_items.db`
+- `psql` — Postgres client (`brew install postgresql` on macOS)
+- `DATABASE_URL` environment variable
+
+## Setup
+
+### With Vercel + Neon (recommended)
+
+Neon has native Vercel integration that auto-configures your database.
+
+1. **Add Neon to your Vercel project**
+   - Vercel dashboard → your project → Storage tab
+   - Click "Create Database" → Select "Neon"
+   - Free tier: 0.5 GB storage, autoscales to zero
+
+2. **Pull environment variables locally**
+   ```bash
+   vercel env pull
+   ```
+
+3. **Source and export**
+   ```bash
+   source .env.local && export DATABASE_URL
+   ```
+
+### With other Postgres providers
+
+```bash
+export DATABASE_URL='postgres://user:pass@host:port/database'
+```
 
 ## Schema
 
 ```sql
 brag_items (
-  id INTEGER PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   achievement TEXT,
-  dates TEXT,          -- JSON array of date strings
-  company_goals TEXT,  -- JSON array of {tag, description} objects
-  growth_areas TEXT,   -- JSON array of {tag, description} objects
+  dates JSONB,           -- Array of date strings
+  company_goals JSONB,   -- Array of {tag, description}
+  growth_areas JSONB,    -- Array of {tag, description}
   outcomes TEXT,
   impact TEXT,
-  pr_id INTEGER,       -- Unique per month when present
-  ticket_no TEXT,      -- Not unique (multiple PRs can share same ticket)
-  month TEXT,          -- YYYY-MM
-  created_at TEXT,
-  updated_at TEXT
+  pr_id INTEGER,
+  ticket_no TEXT,
+  commit_shas JSONB,     -- Array of commit SHAs
+  event_id TEXT,         -- For manual events (non-PR)
+  repo TEXT,
+  state TEXT,
+  month TEXT,            -- YYYY-MM
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ
 )
 ```
 
-## Usage
+## Deduplication
 
-### Initialize Database
+Items are deduplicated in order of priority:
 
-```bash
-./github-summary/scripts/database/bragdoc_db_init.sh
-```
+1. **`pr_id`** — Most items have this (PR-based work)
+2. **`event_id`** — For manual events (awards, presentations)
+3. **`commit_shas`** — Fallback for items without PR or event ID
 
-### Import Historical Data
+This ensures no duplicates per identifier per month, even when LLM-generated content varies between runs.
 
-```bash
-./github-summary/scripts/database/migrations/migrate_import_historical_bragdocs.sh
-```
+## Querying
 
-Imports all `month-*-interpreted.json` files from `.temp/` directory.
-
-### Query Helper Functions
-
-Source the helpers to use utility functions:
+### From psql
 
 ```bash
-source ./github-summary/scripts/database/bragdoc_db_helpers.sh
+# Test connection
+psql "$DATABASE_URL" -c "SELECT 1;"
 
-# Get items for a specific month
-get_items_for_month "2025-07"
-
-# Get item by PR ID
-get_item_by_pr 1625
-
-# Get item by ticket number
-get_item_by_ticket "CORS-4638"
-
-# Export month to JSON file
-export_month_to_json "2025-07" "output.json"
-
-# Get statistics
-get_item_count
-get_month_item_count "2025-07"
-get_all_months
-```
-
-### Direct SQL Queries
-
-```bash
-sqlite3 ./github-summary/scripts/.cache/bragdoc_items.db "
-  SELECT month, COUNT(*) as item_count
+# Get items by month
+psql "$DATABASE_URL" -c "
+  SELECT month, COUNT(*) as items
   FROM brag_items
   GROUP BY month
   ORDER BY month;
 "
+
+# Search by company goal
+psql "$DATABASE_URL" -c "
+  SELECT achievement FROM brag_items 
+  WHERE company_goals @> '[{\"tag\": \"customer-focus\"}]';
+"
 ```
 
-## Automatic Integration
-
-The main workflow (`generate_monthly_bragdocs.sh`) automatically persists items to the database after Phase 4
-enrichment.
-
-## Deduplication
-
-Items are automatically deduplicated by `pr_id` per month:
-
-- If `pr_id` matches for the same month, the item is updated (not duplicated)
-- Multiple items can share the same `ticket_no` (multiple PRs can work on the same JIRA ticket)
-- Items without `pr_id` are inserted as new rows (no deduplication)
-
-This ensures no duplicates per PR per month, even when LLM-generated content varies between runs, while allowing multiple PRs with the same ticket to exist as separate items.
-
-## Syncing to Postgres (Neon/Supabase/etc.)
-
-You can sync your local SQLite database to a serverless Postgres database for remote access and querying from your
-Vercel site.
-
-### Setup with Neon (Recommended)
-
-Neon has native Vercel integration that auto-configures your database connection.
-
-1. **Add Neon to your Vercel project**
-
-   - Go to Vercel dashboard → your project → Storage tab
-   - Click "Create Database"
-   - Select "Neon" (Serverless Postgres)
-   - Free tier: 0.5 GB storage, autoscales to zero
-   - Database and `DATABASE_URL` env var will be auto-configured
-
-2. **Pull environment variables locally**
-
-   ```bash
-   vercel env pull
-   ```
-
-   This creates a `.env.local` file with your `DATABASE_URL`.
-
-3. **Run sync script**
-
-   ```bash
-   # Source and export the variable, then run sync
-   source .env.local && export DATABASE_URL && ./github-summary/scripts/database/sync_to_postgres.sh
-   ```
-
-   Or in two steps:
-
-   ```bash
-   source .env.local
-   export DATABASE_URL
-   ./github-summary/scripts/database/sync_to_postgres.sh
-   ```
-
-### Setup with Other Postgres Providers
-
-If using Supabase, Turso, or another provider:
-
-```bash
-export DATABASE_URL='postgres://username:password@host:port/database'
-./github-summary/scripts/database/sync_to_postgres.sh
-```
-
-### What it does
-
-- Creates the `brag_items` table with matching schema (if not exists)
-- Uses JSONB for JSON fields (better for querying than TEXT)
-- Adds indexes for performance (month, pr_id, ticket_no)
-- Upserts all items from local database
-- Deduplicates on (pr_id, month) only - allows multiple items with same ticket_no
-- Reports summary: new inserts, updates, failures
-
-### Sync behavior
-
-- **One-way sync**: Local SQLite → Postgres
-- **Manual trigger**: Run the script when you want to push updates
-- **Idempotent**: Safe to run multiple times (uses upsert)
-- **Atomic**: Each item synced individually with error handling
-
-### Querying from Vercel
-
-Once synced, you can query from your Vercel site using `@vercel/postgres` or your Postgres client:
+### From your app (TypeScript)
 
 ```typescript
-import { Pool } from '@vercel/postgres';
+import { sql } from '@vercel/postgres';
 
 // Get all items for a month
 const { rows } = await sql`
@@ -177,14 +108,7 @@ const { rows } = await sql`
   WHERE company_goals @> '[{"tag": "customer-focus"}]'
 `;
 
-// Get all unique company goal tags
-const { rows } = await sql`
-  SELECT DISTINCT jsonb_array_elements(company_goals)->>'tag' as tag 
-  FROM brag_items 
-  WHERE company_goals IS NOT NULL
-`;
-
-// Get all unique growth area tags
+// Get unique growth areas
 const { rows } = await sql`
   SELECT DISTINCT jsonb_array_elements(growth_areas)->>'tag' as tag 
   FROM brag_items 
@@ -192,21 +116,46 @@ const { rows } = await sql`
 `;
 ```
 
-### Troubleshooting
+## Helper Scripts
+
+### `postgres_helpers.sh`
+
+Source this to use Postgres utility functions:
+
+```bash
+source ./github-summary/scripts/database/postgres_helpers.sh
+
+# Test connection
+pg_test_connection
+
+# Get item count for a month
+pg_get_month_item_count "2025-11"
+
+# Insert/upsert a brag item
+pg_insert_brag_item "$json_item" "2025-11"
+```
+
+### Migrations
+
+Migration scripts in `migrations/` handle schema changes:
+
+- `migrate_to_postgres_first.sh` — Initial Postgres setup
+- `migrate_add_repo_column.sh` — Add repo field
+- `migrate_add_state_column.sh` — Add state field
+- And others for backfilling data
+
+## Troubleshooting
 
 **"psql is not installed"**
-
 - macOS: `brew install postgresql`
 - Linux: `apt-get install postgresql-client`
 
 **"Cannot connect to Postgres database"**
-
-- Verify your connection string is correct
-- For Neon: check connection pooling is enabled (default)
-- Test connection: `psql "$DATABASE_URL" -c "SELECT 1;"`
+- Check your connection string format
+- For Neon: ensure connection pooling is enabled (default)
+- Test: `psql "$DATABASE_URL" -c "SELECT 1;"`
 
 **"DATABASE_URL environment variable not set"**
-
-- If using Vercel + Neon: run `vercel env pull` to get env vars
+- Vercel + Neon: run `vercel env pull`
 - Otherwise: `export DATABASE_URL='postgres://...'`
-- Check your `.env.local` file exists and has DATABASE_URL
+- Check `.env.local` exists and has DATABASE_URL
