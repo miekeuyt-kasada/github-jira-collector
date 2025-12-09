@@ -59,10 +59,8 @@ SELECT json_object(
       )
     )
     FROM prs
-    WHERE (
-      (merged_at >= '$DATE_START' AND merged_at < '$DATE_END')
-      OR (closed_at >= '$DATE_START' AND closed_at < '$DATE_END' AND merged_at IS NULL)
-    )
+    WHERE created_at >= '$DATE_START' 
+      AND created_at < '$DATE_END'
   ),
   'direct_commits', (
     SELECT json_group_array(
