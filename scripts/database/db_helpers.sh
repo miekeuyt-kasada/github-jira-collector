@@ -180,16 +180,20 @@ VALUES ('$repo', '$sha', '$author', '$date', '$message', '$fetched_at');
 EOF
 }
 
-# Get cached repos for username and interval (with superset logic)
-# Returns repos if a cached superset exists (earlier or equal since_date)
+# Get cached repos for username and interval (with superset logic + TTL)
+# Returns repos if a cached superset exists (earlier or equal since_date) AND is fresh (within 7 days)
 get_cached_repos() {
   local username=$1
   local since_date=$2
+  local max_age_days=7
   
-  # Find the earliest (widest) cached interval that covers our request
+  # Find the earliest (widest) cached interval that covers our request AND is still fresh
+  # Note: datetime() normalizes ISO format (with T and Z) for proper comparison
   local cached_since=$(sqlite3 "$DB_PATH" "
     SELECT since_date FROM repos 
-    WHERE username='$username' AND since_date <= '$since_date' 
+    WHERE username='$username' 
+      AND since_date <= '$since_date' 
+      AND datetime(fetched_at) >= datetime('now', '-$max_age_days days')
     ORDER BY since_date ASC 
     LIMIT 1
   " 2>/dev/null)

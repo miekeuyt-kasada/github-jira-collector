@@ -4,12 +4,32 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../database/db_helpers.sh"
 
-USERNAME=${1:-miekeuyt-kasada}
-MONTHS_BACK=${2:-5}
+# Parse arguments - check for -f/--force-refresh flag
+FORCE_REFRESH=false
+POSITIONAL_ARGS=()
+for arg in "$@"; do
+  case $arg in
+    -f|--force-refresh)
+      FORCE_REFRESH=true
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$arg")
+      ;;
+  esac
+done
+
+USERNAME=${POSITIONAL_ARGS[0]:-miekeuyt-kasada}
+MONTHS_BACK=${POSITIONAL_ARGS[1]:-5}
 SINCE=$(date -v-"${MONTHS_BACK}"m +"%Y-%m-%d")
 
-# Try cache first
-if CACHED_REPOS=$(get_cached_repos "$USERNAME" "$SINCE"); then
+# Force refresh: clear cached repos for this user
+if [ "$FORCE_REFRESH" = "true" ]; then
+  echo "Force refresh: clearing cached repos for $USERNAME" >&2
+  sqlite3 "$DB_PATH" "DELETE FROM repos WHERE username='$USERNAME'" 2>/dev/null || true
+fi
+
+# Try cache first (skip if force refresh)
+if [ "$FORCE_REFRESH" = "false" ] && CACHED_REPOS=$(get_cached_repos "$USERNAME" "$SINCE"); then
   echo "Using cached repos for $USERNAME since $SINCE or earlier" >&2
   echo "$CACHED_REPOS"
   exit 0

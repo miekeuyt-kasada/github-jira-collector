@@ -1,6 +1,7 @@
 # Brag Doc Database
 
-Postgres database for persisting brag doc items. Uses a Postgres-first architecture — items are written directly to Postgres during the pipeline.
+Postgres database for persisting brag doc items. Uses a Postgres-first architecture — items are written directly to
+Postgres during the pipeline.
 
 ## Prerequisites
 
@@ -14,11 +15,13 @@ Postgres database for persisting brag doc items. Uses a Postgres-first architect
 Neon has native Vercel integration that auto-configures your database.
 
 1. **Add Neon to your Vercel project**
+
    - Vercel dashboard → your project → Storage tab
    - Click "Create Database" → Select "Neon"
    - Free tier: 0.5 GB storage, autoscales to zero
 
 2. **Pull environment variables locally**
+
    ```bash
    vercel env pull
    ```
@@ -85,7 +88,7 @@ psql "$DATABASE_URL" -c "
 
 # Search by company goal
 psql "$DATABASE_URL" -c "
-  SELECT achievement FROM brag_items 
+  SELECT achievement FROM brag_items
   WHERE company_goals @> '[{\"tag\": \"customer-focus\"}]';
 "
 ```
@@ -147,15 +150,18 @@ Migration scripts in `migrations/` handle schema changes:
 ## Troubleshooting
 
 **"psql is not installed"**
+
 - macOS: `brew install postgresql`
 - Linux: `apt-get install postgresql-client`
 
 **"Cannot connect to Postgres database"**
+
 - Check your connection string format
 - For Neon: ensure connection pooling is enabled (default)
 - Test: `psql "$DATABASE_URL" -c "SELECT 1;"`
 
 **"DATABASE_URL environment variable not set"**
+
 - Vercel + Neon: run `vercel env pull`
 - Otherwise: `export DATABASE_URL='postgres://...'`
 - Check `.env.local` exists and has DATABASE_URL

@@ -1,35 +1,54 @@
 #!/bin/bash
 # Generate a GitHub commit + PR report for a user
-# Usage: ./generate_report.sh <github_username> <months_back|start_date> [output_file|end_date] [output_file]
+# Usage: ./generate_report.sh [-f] <github_username> <months_back|start_date> [output_file|end_date] [output_file]
 # Examples:
-#   ./generate_report.sh miekeuyt 6                    # Last 6 months
-#   ./generate_report.sh miekeuyt 2025/07/01 2025/10/01  # Date range
+#   ./generate_report.sh miekeuyt 6                       # Last 6 months
+#   ./generate_report.sh miekeuyt 2025/07/01 2025/10/01   # Date range
+#   ./generate_report.sh -f miekeuyt 2025/12/01 2026/01/01  # Force refresh repos cache
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/utils.sh"
 
+# Parse -f/--force-refresh flag
+FORCE_REFRESH=""
+POSITIONAL_ARGS=()
+for arg in "$@"; do
+  case $arg in
+    -f|--force-refresh)
+      FORCE_REFRESH="-f"
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$arg")
+      ;;
+  esac
+done
+
 # Initialize database
 "$SCRIPT_DIR/database/db_init.sh"
 
-USERNAME=${1:-"ADD_USER"}
+USERNAME=${POSITIONAL_ARGS[0]:-"ADD_USER"}
 
 # Detect if second arg is a date or months_back
-if [[ "$2" =~ ^[0-9]{4}[/-][0-9]{2}[/-][0-9]{2}$ ]]; then
+ARG2="${POSITIONAL_ARGS[1]:-}"
+ARG3="${POSITIONAL_ARGS[2]:-}"
+ARG4="${POSITIONAL_ARGS[3]:-}"
+
+if [[ "$ARG2" =~ ^[0-9]{4}[/-][0-9]{2}[/-][0-9]{2}$ ]]; then
   # Date range mode
-  DATE_START=$(echo "$2" | tr '/' '-')
-  DATE_END=$(echo "${3:-$(date +%Y-%m-%d)}" | tr '/' '-')
-  OUTPUT_FILE="${4:-$SCRIPT_DIR/../generated/$USERNAME-commits-${DATE_START}_${DATE_END}.md}"
+  DATE_START=$(echo "$ARG2" | tr '/' '-')
+  DATE_END=$(echo "${ARG3:-$(date +%Y-%m-%d)}" | tr '/' '-')
+  OUTPUT_FILE="${ARG4:-$SCRIPT_DIR/../generated/$USERNAME-commits-${DATE_START}_${DATE_END}.md}"
   
   # For backward compatibility with scripts expecting DATE_BACK
   DATE_BACK="$DATE_START"
 else
   # Months back mode (legacy)
-  MONTHS_BACK=${2:-6}
+  MONTHS_BACK=${ARG2:-6}
   DATE_START=$(date -v-"${MONTHS_BACK}"m +%Y-%m-%d)
   DATE_END=$(date +%Y-%m-%d)
-  OUTPUT_FILE="${3:-$SCRIPT_DIR/../generated/$USERNAME-commits-$(date +%Y%m%d).md}"
+  OUTPUT_FILE="${ARG3:-$SCRIPT_DIR/../generated/$USERNAME-commits-$(date +%Y%m%d).md}"
   DATE_BACK="$DATE_START"
 fi
 
@@ -46,7 +65,7 @@ echo "Getting repositories..."
 REPOS=()
 
 # Calculate months_back for repo fetching (approximate)
-if [[ "$2" =~ ^[0-9]{4}[/-][0-9]{2}[/-][0-9]{2}$ ]]; then
+if [[ "$ARG2" =~ ^[0-9]{4}[/-][0-9]{2}[/-][0-9]{2}$ ]]; then
   # Calculate approximate months between dates for repo fetch
   start_epoch=$(date -j -f "%Y-%m-%d" "$DATE_START" "+%s" 2>/dev/null || date -d "$DATE_START" "+%s" 2>/dev/null)
   now_epoch=$(date +%s)
@@ -58,7 +77,7 @@ fi
 
 while IFS= read -r repo; do
   REPOS+=("$repo")
-done < <("$SCRIPT_DIR/api/fetch_repos.sh" "$USERNAME" "$MONTHS_FOR_REPOS")
+done < <("$SCRIPT_DIR/api/fetch_repos.sh" $FORCE_REFRESH "$USERNAME" "$MONTHS_FOR_REPOS")
 
 for repo in "${REPOS[@]}"; do
   echo "Processing $repo..."
