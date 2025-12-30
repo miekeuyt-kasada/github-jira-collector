@@ -89,7 +89,7 @@ psql "$DATABASE_URL" -c "
 # Search by company goal
 psql "$DATABASE_URL" -c "
   SELECT achievement FROM brag_items
-  WHERE company_goals @> '[{\"tag\": \"customer-focus\"}]';
+  WHERE company_goals @> '[{\"tag\": \"positive-impact\"}]';
 "
 ```
 
@@ -108,7 +108,7 @@ const { rows } = await sql`
 // Search by company goal tag (JSONB query)
 const { rows } = await sql`
   SELECT * FROM brag_items 
-  WHERE company_goals @> '[{"tag": "customer-focus"}]'
+  WHERE company_goals @> '[{"tag": "positive-impact"}]'
 `;
 
 // Get unique growth areas
