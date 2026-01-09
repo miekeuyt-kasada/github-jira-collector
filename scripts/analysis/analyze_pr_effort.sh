@@ -8,9 +8,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 API_DIR="$SCRIPT_DIR/../api"
 DB_DIR="$SCRIPT_DIR/../database"
-CACHE_DIR="$SCRIPT_DIR/../.cache"
-GITHUB_DB="$CACHE_DIR/github_report.db"
-JIRA_DB="$CACHE_DIR/jira_tickets.db"
+# Use environment variable if set, otherwise use default
+CACHE_DIR="${CACHE_DIR:-$SCRIPT_DIR/../.cache}"
+GITHUB_DB="${GITHUB_DB:-$CACHE_DIR/github_report.db}"
+JIRA_DB="${JIRA_DB:-$CACHE_DIR/jira_tickets.db}"
 
 # Source utilities
 source "$SCRIPT_DIR/../utils.sh"
@@ -40,7 +41,7 @@ echo ""
 
 pr_data=$(sqlite3 "$GITHUB_DB" -json "SELECT * FROM prs WHERE repo='$REPO' AND pr_number=$PR_NUMBER" 2>/dev/null | jq '.[0] // null')
 
-if [ "$pr_data" = "null" ]; then
+if [ "$pr_data" = "null" ] || [ -z "$pr_data" ]; then
   echo "Error: PR #$PR_NUMBER not found in database for repo $REPO" >&2
   exit 1
 fi
