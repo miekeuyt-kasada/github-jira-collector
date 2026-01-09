@@ -42,7 +42,17 @@ export JIRA_EPIC_FIELD JIRA_EPIC_NAME_FIELD JIRA_SPRINT_FIELD JIRA_STORY_POINTS_
 export JIRA_CHAPTER_FIELD JIRA_CHAPTER_ALT_FIELD JIRA_SERVICE_FIELD JIRA_SERVICE_ALT_FIELD JIRA_CAPEX_OPEX_FIELD
 ```
 
-### 4. Discover Custom Fields (Optional)
+### 4. Initialize History Table
+
+Run the migration to add the history table:
+
+```bash
+./github-summary/scripts/database/migrations/migrate_add_jira_history.sh
+```
+
+This adds the `jira_ticket_history` table for caching JIRA changelog data.
+
+### 5. Discover Custom Fields (Optional)
 
 Run the discovery script to find your Jira instance's epic field ID:
 
@@ -65,7 +75,9 @@ Add the relevant field IDs to your `.env.local`.
 
 ### Database
 
-SQLite database at `.cache/jira_tickets.db` caches ticket metadata:
+SQLite database at `.cache/jira_tickets.db` caches ticket metadata and history:
+
+#### Table: `jira_tickets`
 
 - **Closed tickets**: Cached permanently (immutable)
 - **Open tickets**: Cached for 24 hours (TTL)
@@ -76,6 +88,26 @@ Schema includes:
 - Relationships: `epic_key`, `epic_name`, `epic_title`, `parent_key`
 - Categorization: `chapter`, `service`, `capex_opex`, `story_points`
 - Metadata: `labels` (JSON array), `resolution`, timestamps
+
+#### Table: `jira_ticket_history` (New)
+
+Caches JIRA changelog for tracking ticket changes over time:
+
+- **Closed tickets**: History cached permanently (immutable)
+- **Open tickets**: History refetched on each request (status might change)
+
+Schema includes:
+- `ticket_key`: Ticket identifier (e.g., VIS-454)
+- `field_name`: Field that changed (e.g., status, assignee)
+- `old_value`, `new_value`: Before/after values
+- `changed_at`: Timestamp of change
+- `changed_by`: User who made the change
+
+**Use cases:**
+- Track when tickets moved to "Done"
+- Detect blocked periods (status = "Waiting", "Blocked")
+- Calculate cycle time (Created → In Progress → Done)
+- Historical queries ("What was this ticket's status on Dec 1?")
 
 **Smart Field Merging:**
 - **Chapter/Service**: Intelligently merges values from both primary and alternative fields
@@ -98,6 +130,8 @@ Schema includes:
 ```bash
 ./github-summary/scripts/api/get_jira_ticket.sh VIS-454
 ```
+
+**Automatic history caching:** If the ticket is closed (Done/Resolved/Closed), the script automatically fetches and caches its changelog. This is a one-time operation — subsequent calls use the cached history.
 
 Output (JSON):
 ```json
@@ -127,12 +161,12 @@ Source the helpers in your scripts:
 ```bash
 source ./github-summary/scripts/database/jira_helpers.sh
 
-# Check if cached
+# Check if ticket metadata is cached
 if is_jira_cached "VIS-454"; then
   echo "Ticket is cached and closed"
 fi
 
-# Get cached ticket
+# Get cached ticket metadata
 ticket_data=$(get_cached_jira_ticket "VIS-454")
 
 # Get all tickets for an epic
@@ -140,6 +174,20 @@ epic_tickets=$(get_tickets_by_epic "VIS-400")
 
 # Get all epic keys
 all_epics=$(get_all_epic_keys)
+
+# Check if ticket history is cached
+if is_jira_history_cached "VIS-454"; then
+  echo "History is cached"
+fi
+
+# Get status transitions for a ticket
+status_history=$(get_jira_status_history "VIS-454")
+
+# Get blocked periods (status contained block/wait/hold/park)
+blocked_periods=$(get_jira_blocked_periods "VIS-454")
+
+# Get full changelog for a ticket
+full_history=$(get_jira_full_history "VIS-454")
 ```
 
 ## Testing
@@ -221,6 +269,22 @@ Run the discovery script to find the correct field ID for your instance:
 ```bash
 ./github-summary/scripts/api/discover_jira_fields.sh
 ```
+
+## Helper Scripts
+
+### Get Blocked Time
+
+Calculate how many days a ticket was in blocked status during a date range:
+
+```bash
+./github-summary/scripts/analysis/get_jira_blocked_time.sh VIS-454 2025-10-01 2025-11-01
+```
+
+Output: Number of days (e.g., `15`)
+
+**Uses cached history when available** — if the ticket is closed and history is cached, no API calls are made.
+
+**Used by:** `analyze_pr_effort.sh` automatically uses this to subtract blocked time from PR effort calculations.
 
 ## Future Integration
 

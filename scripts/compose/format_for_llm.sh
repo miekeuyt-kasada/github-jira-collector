@@ -25,7 +25,15 @@ jq -r '
       "Title: \(.title)\n",
       (if .jira_ticket then "JIRA: \(.jira_ticket)\n" else "" end),
       (if .description and (.description | length) > 0 then "Description:\n\(.description)\n" else "" end),
-      (if .merged_at then "Merged: \(.merged_at)\n" else "Closed: \(.closed_at)\n" end),
+      (
+        if .merged_at and .merged_at != "" and .merged_at != "null" then 
+          "Status: MERGED on \(.merged_at)\n" 
+        elif .closed_at and .closed_at != "" and .closed_at != "null" then 
+          "Status: CLOSED (not merged) on \(.closed_at)\n" 
+        else 
+          "Status: OPEN (created on \(.created_at))\n" 
+        end
+      ),
       "\nCommits:\n",
       (.commits[] | "- \(.date) | \(.message)")
     )

@@ -39,31 +39,43 @@ fetch_ticket() {
   local ticket_key=$1
   
   # Check if already cached with TTL
+  local ticket_cached=false
   if is_jira_cached_with_ttl "$ticket_key" 24; then
     echo "  ✓ $ticket_key (cached)" >&2
-    get_cached_jira_ticket "$ticket_key"
-    return 0
+    ticket_cached=true
+  else
+    echo "  → Fetching $ticket_key from Jira..." >&2
+    
+    # Fetch from API
+    response=$(curl -s -X GET \
+      "$JIRA_BASE_URL/rest/api/3/issue/$ticket_key?fields=$FIELDS" \
+      -H "Accept: application/json" \
+      -H "$AUTH_HEADER")
+    
+    # Check for errors
+    if echo "$response" | jq -e '.errorMessages' > /dev/null 2>&1; then
+      echo "  ✗ Error fetching $ticket_key:" >&2
+      echo "$response" | jq -r '.errorMessages[]' >&2
+      return 1
+    fi
+    
+    # Cache the ticket
+    cache_jira_ticket "$response"
+    echo "  ✓ $ticket_key (fetched)" >&2
   fi
   
-  echo "  → Fetching $ticket_key from Jira..." >&2
-  
-  # Fetch from API
-  response=$(curl -s -X GET \
-    "$JIRA_BASE_URL/rest/api/3/issue/$ticket_key?fields=$FIELDS" \
-    -H "Accept: application/json" \
-    -H "$AUTH_HEADER")
-  
-  # Check for errors
-  if echo "$response" | jq -e '.errorMessages' > /dev/null 2>&1; then
-    echo "  ✗ Error fetching $ticket_key:" >&2
-    echo "$response" | jq -r '.errorMessages[]' >&2
-    return 1
+  # Fetch history if not cached (for both newly fetched and previously cached tickets)
+  # This handles tickets cached before history table existed
+  if ! is_jira_history_cached "$ticket_key"; then
+    echo "  → Fetching changelog for $ticket_key..." >&2
+    changelog=$(curl -s -X GET \
+      "$JIRA_BASE_URL/rest/api/3/issue/$ticket_key?expand=changelog&fields=none" \
+      -H "Accept: application/json" \
+      -H "$AUTH_HEADER")
+    
+    cache_jira_history "$ticket_key" "$changelog"
+    echo "  ✓ Changelog cached" >&2
   fi
-  
-  # Cache the ticket
-  cache_jira_ticket "$response"
-  
-  echo "  ✓ $ticket_key (fetched)" >&2
   
   # Return cached version (normalized format)
   get_cached_jira_ticket "$ticket_key"

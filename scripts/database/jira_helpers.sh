@@ -276,3 +276,139 @@ get_tickets_by_label() {
 get_all_epic_keys() {
   sqlite3 "$DB_PATH" "SELECT DISTINCT epic_key FROM jira_tickets WHERE epic_key IS NOT NULL AND epic_key != '' ORDER BY epic_key" 2>/dev/null
 }
+
+# ============================================================================
+# JIRA History Functions (for caching ticket changelog)
+# ============================================================================
+
+# Check if ticket history is cached
+is_jira_history_cached() {
+  local ticket_key=$1
+  
+  # Check if history exists in cache
+  local history_count=$(sqlite3 "$DB_PATH" "
+    SELECT COUNT(*) FROM jira_ticket_history 
+    WHERE ticket_key='$ticket_key'
+  " 2>/dev/null)
+  
+  if [ "$history_count" -gt 0 ]; then
+    # History exists, check if ticket is closed (immutable) or within TTL
+    local is_closed=$(sqlite3 "$DB_PATH" "
+      SELECT is_closed FROM jira_tickets 
+      WHERE ticket_key='$ticket_key'
+    " 2>/dev/null)
+    
+    if [ "$is_closed" = "1" ]; then
+      # Closed ticket: history is immutable, use cache
+      return 0
+    else
+      # Open ticket: check if history was fetched recently (24hr TTL)
+      local fetched_recently=$(sqlite3 "$DB_PATH" "
+        SELECT COUNT(*) FROM jira_ticket_history
+        WHERE ticket_key='$ticket_key'
+        AND datetime(fetched_at) >= datetime('now', '-24 hours')
+        LIMIT 1
+      " 2>/dev/null)
+      [ "$fetched_recently" -gt 0 ]
+    fi
+  else
+    # No history cached
+    return 1
+  fi
+}
+
+# Cache JIRA changelog entries from API response
+cache_jira_history() {
+  local ticket_key=$1
+  local changelog_json=$2
+  
+  # Parse changelog and insert each history entry
+  # Use NULL placeholder for empty strings to handle tab parsing correctly
+  echo "$changelog_json" | jq -r '.changelog.histories[]? | 
+    .created as $ts | 
+    (.author.displayName // .author.emailAddress // "unknown") as $author |
+    .items[]? | 
+    [
+      .field, 
+      ((.fromString // "") | if . == "" then "NULL" else . end), 
+      ((.toString // "") | if . == "" then "NULL" else . end), 
+      $ts, 
+      $author
+    ] | 
+    @tsv
+  ' | while IFS=$'\t' read -r field old_val new_val ts author; do
+    # Convert NULL placeholder back to empty string
+    [ "$old_val" = "NULL" ] && old_val=""
+    [ "$new_val" = "NULL" ] && new_val=""
+    
+    # Escape single quotes for SQL
+    old_val=$(echo "$old_val" | sed "s/'/''/g")
+    new_val=$(echo "$new_val" | sed "s/'/''/g")
+    author=$(echo "$author" | sed "s/'/''/g")
+    field=$(echo "$field" | sed "s/'/''/g")
+    
+    # Insert, skip if duplicate
+    sqlite3 "$DB_PATH" "
+      INSERT OR IGNORE INTO jira_ticket_history 
+        (ticket_key, field_name, old_value, new_value, changed_at, changed_by)
+      VALUES 
+        ('$ticket_key', '$field', '$old_val', '$new_val', '$ts', '$author')
+    " 2>/dev/null
+  done
+}
+
+# Get all status transitions for a ticket (ordered by date)
+get_jira_status_history() {
+  local ticket_key=$1
+  
+  sqlite3 "$DB_PATH" -json "
+    SELECT 
+      changed_at,
+      old_value as from_status,
+      new_value as to_status,
+      changed_by
+    FROM jira_ticket_history
+    WHERE ticket_key='$ticket_key' 
+      AND field_name='status'
+    ORDER BY changed_at
+  " 2>/dev/null
+}
+
+# Get blocked periods for a ticket (when status contained block/wait/hold/park keywords)
+get_jira_blocked_periods() {
+  local ticket_key=$1
+  
+  sqlite3 "$DB_PATH" -json "
+    SELECT 
+      changed_at as transition_date,
+      new_value as status,
+      changed_by
+    FROM jira_ticket_history
+    WHERE ticket_key='$ticket_key' 
+      AND field_name='status'
+      AND (
+        LOWER(new_value) LIKE '%block%' 
+        OR LOWER(new_value) LIKE '%wait%'
+        OR LOWER(new_value) LIKE '%hold%'
+        OR LOWER(new_value) LIKE '%park%'
+      )
+    ORDER BY changed_at
+  " 2>/dev/null
+}
+
+# Get all history for a ticket (all fields)
+get_jira_full_history() {
+  local ticket_key=$1
+  
+  sqlite3 "$DB_PATH" -json "
+    SELECT 
+      field_name,
+      old_value,
+      new_value,
+      changed_at,
+      changed_by
+    FROM jira_ticket_history
+    WHERE ticket_key='$ticket_key'
+    ORDER BY changed_at
+  " 2>/dev/null
+}

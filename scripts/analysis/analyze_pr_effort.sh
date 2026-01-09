@@ -142,89 +142,32 @@ echo ""
 
 # If JIRA ticket exists, check if it was blocked during PR timeline
 blocked_days=0
-if [ -n "$jira_ticket" ] && [ "$jira_ticket" != "null" ] && [ -n "${JIRA_EMAIL:-}" ] && [ -n "${JIRA_API_TOKEN:-}" ] && [ -n "${JIRA_BASE_URL:-}" ]; then
+if [ -n "$jira_ticket" ] && [ "$jira_ticket" != "null" ]; then
   echo "🚫 **Checking JIRA Blocked Status**"
   
   # Get PR timeline boundaries from commits
   pr_timeline_first=$(echo "$commits_data" | jq -r '.[0].author_date // .[0].date' | cut -d'T' -f1)
   pr_timeline_last=$(echo "$commits_data" | jq -r '.[-1].author_date // .[-1].date' | cut -d'T' -f1)
   
-  # Fetch changelog with status transitions
-  AUTH_HEADER="Authorization: Basic $(echo -n "$JIRA_EMAIL:$JIRA_API_TOKEN" | base64)"
+  # Use helper script to get blocked time (uses cache if available)
+  blocked_days=$("$SCRIPT_DIR/get_jira_blocked_time.sh" "$jira_ticket" "$pr_timeline_first" "$pr_timeline_last" 2>/dev/null || echo "0")
   
-  changelog_response=$(curl -s -X GET \
-    "$JIRA_BASE_URL/rest/api/3/issue/$jira_ticket?expand=changelog&fields=none" \
-    -H "Accept: application/json" \
-    -H "$AUTH_HEADER" 2>/dev/null || echo '{}')
-  
-  # Parse status transitions to track full blocked periods
-  if echo "$changelog_response" | jq -e '.changelog' > /dev/null 2>&1; then
-    # Get current status
-    current_status=$(curl -s -X GET \
-      "$JIRA_BASE_URL/rest/api/3/issue/$jira_ticket?fields=status" \
-      -H "Accept: application/json" \
-      -H "$AUTH_HEADER" 2>/dev/null | jq -r '.fields.status.name // ""')
+  if [ "$blocked_days" -gt 0 ]; then
+    echo "   ⚠️  Ticket was blocked/waiting for $blocked_days day(s) during PR timeline"
+    echo "   Subtracting blocked time from base duration"
     
-    # Simpler approach: Check if ticket is currently in blocked status
-    # If yes, and last transition to blocked was before/during PR, count those days
-    if echo "$current_status" | grep -qiE "block|wait|hold|park"; then
-      # Get when it transitioned to blocked status
-      last_blocked_transition=$(echo "$changelog_response" | jq -r '
-        [.changelog.histories[] | 
-          select(.items[] | .field == "status") |
-          select(.items[] | select(.field == "status") | .toString | test("(?i)block|wait|hold|park")) |
-          .created
-        ] | sort | .[-1]
-      ')
-      
-      if [ -n "$last_blocked_transition" ] && [ "$last_blocked_transition" != "null" ]; then
-        blocked_start_date=$(echo "$last_blocked_transition" | cut -d'T' -f1)
-        
-        # Calculate overlap between blocked period and PR timeline
-        # Blocked period: blocked_start_date → pr_timeline_last
-        # PR timeline: pr_timeline_first → pr_timeline_last
-        # Overlap: max(blocked_start, pr_first) → pr_last
-        
-        if [ "$blocked_start_date" \< "$pr_timeline_last" ]; then
-          # Determine overlap start (later of blocked start or PR start)
-          if [ "$blocked_start_date" \> "$pr_timeline_first" ]; then
-            overlap_start="$blocked_start_date"
-          else
-            overlap_start="$pr_timeline_first"
-          fi
-          
-          # Calculate days between overlap_start and pr_timeline_last
-          blocked_days=$(echo "scale=0; ($(date -j -f "%Y-%m-%d" "$pr_timeline_last" +%s) - $(date -j -f "%Y-%m-%d" "$overlap_start" +%s)) / 86400" | bc)
-          
-          if [ "$blocked_days" -gt 0 ]; then
-            echo "   ⚠️  Ticket was blocked/waiting for $blocked_days day(s) during PR timeline"
-            echo "   (Blocked since $blocked_start_date, still blocked now)"
-            echo "   Subtracting blocked time from base duration"
-            
-            # Store original for display
-            original_base=$base_duration_days
-            
-            # Subtract blocked days from base timeline
-            base_duration_days=$(echo "scale=1; $base_duration_days - $blocked_days" | bc)
-            
-            # Floor at 0.1 minimum
-            base_duration_days=$(echo "scale=1; if ($base_duration_days < 0.1) 0.1 else $base_duration_days" | bc)
-            
-            echo "   Adjusted base: $base_duration_days days (was $original_base days)"
-          else
-            echo "   ✓ No blocked status detected during PR timeline"
-          fi
-        else
-          echo "   ✓ No blocked status detected during PR timeline"
-        fi
-      else
-        echo "   ✓ No blocked status detected during PR timeline"
-      fi
-    else
-      echo "   ✓ No blocked status detected during PR timeline (current status: $current_status)"
-    fi
+    # Store original for display
+    original_base=$base_duration_days
+    
+    # Subtract blocked days from base timeline
+    base_duration_days=$(echo "scale=1; $base_duration_days - $blocked_days" | bc)
+    
+    # Floor at 0.1 minimum
+    base_duration_days=$(echo "scale=1; if ($base_duration_days < 0.1) 0.1 else $base_duration_days" | bc)
+    
+    echo "   Adjusted base: $base_duration_days days (was $original_base days)"
   else
-    echo "   ℹ️  Could not fetch JIRA changelog (API credentials may be missing)"
+    echo "   ✓ No blocked status detected during PR timeline"
   fi
 fi
 
