@@ -412,3 +412,88 @@ get_jira_full_history() {
     ORDER BY changed_at
   " 2>/dev/null
 }
+
+# Calculate total days a ticket was blocked during a date range
+# Extracted from get_jira_blocked_time.sh for testability
+get_total_blocked_days() {
+  local ticket_key="$1"
+  local start_date="$2"
+  local end_date="$3"
+  
+  # Get status history transitions for this ticket
+  local history=$(sqlite3 "$DB_PATH" <<EOF
+SELECT changed_at, old_value, new_value
+FROM jira_ticket_history
+WHERE ticket_key = '$ticket_key'
+  AND field = 'status'
+ORDER BY changed_at ASC;
+EOF
+  )
+  
+  if [ -z "$history" ]; then
+    echo "0.0"
+    return
+  fi
+  
+  # Convert dates to epoch for calculation (UTC)
+  local start_epoch end_epoch
+  if date -u -j -f "%Y-%m-%d" "${start_date}T00:00:00Z" "+%s" >/dev/null 2>&1; then
+    # macOS - use UTC
+    start_epoch=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "${start_date}T00:00:00Z" "+%s")
+    end_epoch=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "${end_date}T00:00:00Z" "+%s")
+  else
+    # Linux - use UTC
+    start_epoch=$(date -u -d "${start_date}T00:00:00Z" "+%s")
+    end_epoch=$(date -u -d "${end_date}T00:00:00Z" "+%s")
+  fi
+  
+  local total_blocked_seconds=0
+  local currently_blocked=0
+  local blocked_since_epoch=0
+  
+  # Parse each status transition
+  while IFS='|' read -r changed_at old_value new_value; do
+    [ -z "$changed_at" ] && continue
+    
+    local change_epoch
+    if date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$changed_at" "+%s" >/dev/null 2>&1; then
+      change_epoch=$(date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$changed_at" "+%s")
+    else
+      change_epoch=$(date -u -d "$changed_at" "+%s")
+    fi
+    
+    # Skip if outside date range
+    [ "$change_epoch" -lt "$start_epoch" ] && continue
+    [ "$change_epoch" -gt "$end_epoch" ] && break
+    
+    # Check if entering blocked state
+    if [[ "$new_value" =~ Blocked ]] || [[ "$new_value" =~ Waiting ]]; then
+      currently_blocked=1
+      blocked_since_epoch=$change_epoch
+    # Check if exiting blocked state
+    elif [ "$currently_blocked" -eq 1 ]; then
+      # If not blocked anymore, calculate duration
+      if [[ ! "$new_value" =~ Blocked ]] && [[ ! "$new_value" =~ Waiting ]]; then
+        local blocked_duration=$((change_epoch - blocked_since_epoch))
+        total_blocked_seconds=$((total_blocked_seconds + blocked_duration))
+        currently_blocked=0
+      fi
+    fi
+  done <<< "$history"
+  
+  # If still blocked at end, count remaining time
+  if [ "$currently_blocked" -eq 1 ]; then
+    local remaining=$((end_epoch - blocked_since_epoch))
+    total_blocked_seconds=$((total_blocked_seconds + remaining))
+  fi
+  
+  # Convert to days with one decimal
+  if command -v awk >/dev/null 2>&1; then
+    local days_float=$(awk "BEGIN {printf \"%.1f\", $total_blocked_seconds / 86400}")
+    echo "$days_float"
+  else
+    # Fallback to bash arithmetic (integer division)
+    local days_int=$((total_blocked_seconds / 86400))
+    echo "${days_int}.0"
+  fi
+}

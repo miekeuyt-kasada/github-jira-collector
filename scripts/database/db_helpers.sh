@@ -1,9 +1,9 @@
 #!/bin/bash
 # Database helper functions for GitHub report caching
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CACHE_DIR="$SCRIPT_DIR/../.cache"
-DB_PATH="$CACHE_DIR/github_report.db"
+SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "$0")" && pwd)}"
+CACHE_DIR="${CACHE_DIR:-$SCRIPT_DIR/../.cache}"
+DB_PATH="${DB_PATH:-$CACHE_DIR/github_report.db}"
 
 # Load utility functions for duration calculations
 source "$SCRIPT_DIR/../utils.sh"
