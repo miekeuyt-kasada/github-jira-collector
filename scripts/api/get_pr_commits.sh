@@ -49,7 +49,7 @@ if [ ${#UNIQUE_COMMITS[@]} -gt 0 ]; then
     cat "$commits_json" | jq -c --arg commit "$unique_commit" \
       '.[] | select((.commit.message | split("\n")[0]) == $commit)' |
       while IFS= read -r commit_json; do
-        commit_date=$(echo "$commit_json" | jq -r '.commit.committer.date')
+        commit_date=$(echo "$commit_json" | jq -r '.commit.author.date // .commit.committer.date')
         commit_message=$(echo "$commit_json" | jq -r '.commit.message' | head -n1)
         formatted_date=$(format_date_local "$commit_date")
         echo "* **${formatted_date}** - ${commit_message}" >> "$output_file"
@@ -146,9 +146,10 @@ if [ "$PR_COUNT" -gt 0 ]; then
       pr_commits=$(gh api --paginate "repos/$repo/pulls/$pr_number/commits" 2>/dev/null)
       
       # Compute commit span for display (excluding weekends)
+      # Using author dates for accurate work spread
       if [ "$pr_commits" != "[]" ] && [ -n "$pr_commits" ]; then
-        first_commit_date=$(echo "$pr_commits" | jq -r 'sort_by(.commit.committer.date) | .[0].commit.committer.date // ""')
-        last_commit_date=$(echo "$pr_commits" | jq -r 'sort_by(.commit.committer.date) | .[-1].commit.committer.date // ""')
+        first_commit_date=$(echo "$pr_commits" | jq -r 'sort_by(.commit.author.date) | .[0].commit.author.date // ""')
+        last_commit_date=$(echo "$pr_commits" | jq -r 'sort_by(.commit.author.date) | .[-1].commit.author.date // ""')
         
         if [ -n "$first_commit_date" ] && [ "$first_commit_date" != "null" ]; then
           commit_span_seconds=$(calculate_business_duration "$first_commit_date" "$last_commit_date")
@@ -220,7 +221,8 @@ if [ "$PR_COUNT" -gt 0 ]; then
         
         echo "$pr_commits" | jq -c --arg username "$username" '.[] | select(.author == $username)' |
           while IFS= read -r commit_json; do
-            commit_date=$(echo "$commit_json" | jq -r '.date')
+            # For cached data, prefer author_date if available, fallback to date
+            commit_date=$(echo "$commit_json" | jq -r '.author_date // .date')
             commit_message=$(echo "$commit_json" | jq -r '.message')
             formatted_date=$(format_date_local "$commit_date")
             echo "    - **${formatted_date}** - ${commit_message}" >> "$output_file"
@@ -232,7 +234,7 @@ if [ "$PR_COUNT" -gt 0 ]; then
         
         echo "$pr_commits" | jq -c --arg username "$username" '.[] | select(.author.login == $username)' |
           while IFS= read -r commit_json; do
-            commit_date=$(echo "$commit_json" | jq -r '.commit.committer.date')
+            commit_date=$(echo "$commit_json" | jq -r '.commit.author.date // .commit.committer.date')
             commit_message=$(echo "$commit_json" | jq -r '.commit.message' | head -n1)
             formatted_date=$(format_date_local "$commit_date")
             echo "    - **${formatted_date}** - ${commit_message}" >> "$output_file"

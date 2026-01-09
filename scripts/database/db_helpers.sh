@@ -106,11 +106,15 @@ cache_pr_commits() {
   # Delete existing commits for this PR first
   sqlite3 "$DB_PATH" "DELETE FROM pr_commits WHERE repo='$repo' AND pr_number=$pr_number"
   
-  # Get first and last commit dates
+  # Get first and last commit dates (committer dates - for reference)
   local first_commit_date=$(echo "$commits_json" | jq -r 'sort_by(.commit.committer.date) | .[0].commit.committer.date // ""')
   local last_commit_date=$(echo "$commits_json" | jq -r 'sort_by(.commit.committer.date) | .[-1].commit.committer.date // ""')
   
-  # Compute commit span (excluding weekends)
+  # Get first and last author dates (when commits were actually written)
+  local first_author_date=$(echo "$commits_json" | jq -r 'sort_by(.commit.author.date) | .[0].commit.author.date // ""')
+  local last_author_date=$(echo "$commits_json" | jq -r 'sort_by(.commit.author.date) | .[-1].commit.author.date // ""')
+  
+  # Compute commit span (excluding weekends) - using committer dates for backward compatibility
   local commit_span_seconds=0
   local commit_span_formatted=""
   if [ -n "$first_commit_date" ] && [ -n "$last_commit_date" ] && [ "$first_commit_date" != "null" ]; then
@@ -118,16 +122,25 @@ cache_pr_commits() {
     commit_span_formatted=$(format_duration_dhm "$commit_span_seconds")
   fi
   
+  # Compute author span (excluding weekends) - reflects actual work spread
+  local author_span_seconds=0
+  local author_span_formatted=""
+  if [ -n "$first_author_date" ] && [ -n "$last_author_date" ] && [ "$first_author_date" != "null" ]; then
+    author_span_seconds=$(calculate_business_duration "$first_author_date" "$last_author_date")
+    author_span_formatted=$(format_duration_dhm "$author_span_seconds")
+  fi
+  
   # Insert each commit
   echo "$commits_json" | jq -c '.[]' | while IFS= read -r commit; do
     local sha=$(echo "$commit" | jq -r '.sha')
     local author=$(echo "$commit" | jq -r '.author.login // .commit.author.name' | sed "s/'/''/g")
     local date=$(echo "$commit" | jq -r '.commit.committer.date')
+    local author_date=$(echo "$commit" | jq -r '.commit.author.date // .commit.committer.date')
     local message=$(echo "$commit" | jq -r '.commit.message' | head -n1 | sed "s/'/''/g")
     
     sqlite3 "$DB_PATH" <<EOF
-INSERT OR REPLACE INTO pr_commits (repo, pr_number, sha, author, date, message, fetched_at)
-VALUES ('$repo', $pr_number, '$sha', '$author', '$date', '$message', '$fetched_at');
+INSERT OR REPLACE INTO pr_commits (repo, pr_number, sha, author, date, author_date, message, fetched_at)
+VALUES ('$repo', $pr_number, '$sha', '$author', '$date', '$author_date', '$message', '$fetched_at');
 EOF
   done
   
@@ -138,7 +151,11 @@ UPDATE prs
 SET first_commit_date = '$first_commit_date',
     last_commit_date = '$last_commit_date',
     commit_span_seconds = $commit_span_seconds,
-    commit_span_formatted = '$commit_span_formatted'
+    commit_span_formatted = '$commit_span_formatted',
+    first_author_date = '$first_author_date',
+    last_author_date = '$last_author_date',
+    author_span_seconds = $author_span_seconds,
+    author_span_formatted = '$author_span_formatted'
 WHERE repo = '$repo' AND pr_number = $pr_number;
 EOF
   fi

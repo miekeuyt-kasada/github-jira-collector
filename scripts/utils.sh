@@ -17,10 +17,20 @@ format_date_local() {
 
 to_epoch() {
   local input="$1"
+  if [ -z "$input" ] || [ "$input" = "null" ]; then
+    echo "0"
+    return
+  fi
+  
+  # Try macOS date format first
   if date -u -jf "%Y-%m-%dT%H:%M:%SZ" "$input" "+%s" >/dev/null 2>&1; then
     date -u -jf "%Y-%m-%dT%H:%M:%SZ" "$input" "+%s"
-  else
+  # Try GNU date format
+  elif date -d "$input" "+%s" >/dev/null 2>&1; then
     date -d "$input" "+%s"
+  else
+    # Fallback: return 0 if parsing fails
+    echo "0"
   fi
 }
 # --- Convert seconds into "Xd Yh Zm" ---
