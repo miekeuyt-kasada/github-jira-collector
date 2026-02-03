@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS prs (
   last_commit_date TEXT,
   commit_span_seconds INTEGER,
   commit_span_formatted TEXT,
+  first_author_date TEXT,
+  last_author_date TEXT,
+  author_span_seconds INTEGER,
+  author_span_formatted TEXT,
   PRIMARY KEY (repo, pr_number)
 );
 
@@ -38,6 +42,7 @@ CREATE TABLE IF NOT EXISTS pr_commits (
   sha TEXT NOT NULL,
   author TEXT,
   date TEXT,
+  author_date TEXT,
   message TEXT,
   fetched_at TEXT,
   PRIMARY KEY (repo, pr_number, sha)

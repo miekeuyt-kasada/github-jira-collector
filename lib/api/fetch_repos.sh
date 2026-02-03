@@ -4,22 +4,43 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../database/db_helpers.sh"
 
-# Parse arguments - check for -f/--force-refresh flag
+# Load environment variables from .env.local if it exists
+if [ -f "$SCRIPT_DIR/../../.env.local" ]; then
+  source "$SCRIPT_DIR/../../.env.local"
+fi
+
+# Parse arguments
 FORCE_REFRESH=false
+USERNAME=""
 POSITIONAL_ARGS=()
-for arg in "$@"; do
-  case $arg in
+while [[ $# -gt 0 ]]; do
+  case $1 in
     -f|--force-refresh)
       FORCE_REFRESH=true
+      shift
+      ;;
+    --username)
+      USERNAME="$2"
+      shift 2
       ;;
     *)
-      POSITIONAL_ARGS+=("$arg")
+      POSITIONAL_ARGS+=("$1")
+      shift
       ;;
   esac
 done
 
-USERNAME=${POSITIONAL_ARGS[0]:-${GITHUB_USERNAME:-}}
-MONTHS_BACK=${POSITIONAL_ARGS[1]:-5}
+# Use provided username or fall back to env var
+USERNAME=${USERNAME:-${GITHUB_USERNAME:-}}
+
+if [ -z "$USERNAME" ]; then
+  echo "Error: GitHub username not provided" >&2
+  echo "Usage: $0 [--username <username>] [-f] [months_back]" >&2
+  echo "  Provide --username flag or set GITHUB_USERNAME environment variable" >&2
+  exit 1
+fi
+
+MONTHS_BACK=${POSITIONAL_ARGS[0]:-5}
 SINCE=$(date -v-"${MONTHS_BACK}"m +"%Y-%m-%d")
 
 # Force refresh: clear cached repos for this user

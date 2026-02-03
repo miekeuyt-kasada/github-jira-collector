@@ -7,6 +7,11 @@
 
 set -euo pipefail
 
+# Load environment variables from .env.local if it exists
+if [ -f "$(dirname "$0")/../../.env.local" ]; then
+  source "$(dirname "$0")/../../.env.local"
+fi
+
 # INSTRUCTIONS:
 # 1. Open Jira in your browser (kasada.atlassian.net)
 # 2. Open DevTools (F12) → Network tab

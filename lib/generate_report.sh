@@ -1,9 +1,10 @@
 #!/bin/bash
 # Generate markdown report from cached GitHub data
-# Usage: ./generate_report.sh <username> <start_date> <end_date> [output_file]
+# Usage: ./generate_report.sh [--username <username>] <start_date> <end_date> [output_file]
 # Examples:
-#   ./generate_report.sh miekeuyt 2025-07-01 2025-10-01
-#   ./generate_report.sh miekeuyt 2025-07-01 2025-10-01 custom-report.md
+#   ./generate_report.sh --username miekeuyt 2025-07-01 2025-10-01
+#   ./generate_report.sh 2025-07-01 2025-10-01  # Uses GITHUB_USERNAME env var
+#   ./generate_report.sh --username miekeuyt 2025-07-01 2025-10-01 custom-report.md
 
 set -e
 
@@ -11,14 +12,45 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/utils.sh"
 source "$SCRIPT_DIR/database/db_helpers.sh"
 
-USERNAME="${1:-}"
-DATE_START="${2:-}"
-DATE_END="${3:-}"
-OUTPUT_FILE="${4:-$SCRIPT_DIR/../generated/$USERNAME-commits-${DATE_START}_${DATE_END}.md}"
+# Load environment variables from .env.local if it exists
+if [ -f "$SCRIPT_DIR/../.env.local" ]; then
+  source "$SCRIPT_DIR/../.env.local"
+fi
 
-if [ -z "$USERNAME" ] || [ -z "$DATE_START" ] || [ -z "$DATE_END" ]; then
-  echo "Usage: $0 <username> <start_date> <end_date> [output_file]"
-  echo "Example: $0 miekeuyt 2025-07-01 2025-10-01"
+# Parse flags
+USERNAME=""
+POSITIONAL_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --username)
+      USERNAME="$2"
+      shift 2
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Use provided username or fall back to env var
+USERNAME=${USERNAME:-${GITHUB_USERNAME:-}}
+DATE_START="${POSITIONAL_ARGS[0]:-}"
+DATE_END="${POSITIONAL_ARGS[1]:-}"
+
+if [ -z "$USERNAME" ]; then
+  echo "Error: GitHub username not provided" >&2
+  echo "Usage: $0 [--username <username>] <start_date> <end_date> [output_file]" >&2
+  echo "  Provide --username flag or set GITHUB_USERNAME environment variable" >&2
+  exit 1
+fi
+
+OUTPUT_FILE="${POSITIONAL_ARGS[2]:-$SCRIPT_DIR/../generated/$USERNAME-commits-${DATE_START}_${DATE_END}.md}"
+
+if [ -z "$DATE_START" ] || [ -z "$DATE_END" ]; then
+  echo "Usage: $0 [--username <username>] <start_date> <end_date> [output_file]"
+  echo "Example: $0 --username miekeuyt 2025-07-01 2025-10-01"
+  echo "         $0 2025-07-01 2025-10-01  # Uses GITHUB_USERNAME env var"
   exit 1
 fi
 

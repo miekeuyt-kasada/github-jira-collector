@@ -10,6 +10,11 @@ DB_DIR="$SCRIPT_DIR/../database"
 # Source helper functions
 source "$DB_DIR/jira_helpers.sh"
 
+# Load environment variables from .env.local if it exists
+if [ -f "$SCRIPT_DIR/../../.env.local" ]; then
+  source "$SCRIPT_DIR/../../.env.local"
+fi
+
 # Check required environment variables
 if [ -z "${JIRA_EMAIL:-}" ] || [ -z "${JIRA_API_TOKEN:-}" ] || [ -z "${JIRA_BASE_URL:-}" ]; then
   echo "❌ Error: Required Jira environment variables not set" >&2

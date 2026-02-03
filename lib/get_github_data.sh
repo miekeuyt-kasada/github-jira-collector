@@ -1,29 +1,42 @@
 #!/bin/bash
 # Fetch GitHub data (PRs and commits) and cache to SQLite database
-# Usage: ./get_github_data.sh [-f] <github_username> <months_back|start_date> [end_date]
+# Usage: ./get_github_data.sh [--username <github_username>] [-f] <months_back|start_date> [end_date]
 # Examples:
-#   ./get_github_data.sh miekeuyt 6                       # Last 6 months
-#   ./get_github_data.sh miekeuyt 2025/07/01 2025/10/01   # Date range
-#   ./get_github_data.sh -f miekeuyt 2025/12/01 2026/01/01  # Force refresh repos cache
+#   ./get_github_data.sh --username miekeuyt 6                       # Last 6 months
+#   ./get_github_data.sh 6                                           # Uses GITHUB_USERNAME env var
+#   ./get_github_data.sh --username miekeuyt 2025/07/01 2025/10/01   # Date range
+#   ./get_github_data.sh -f --username miekeuyt 2025/12/01 2026/01/01  # Force refresh repos cache
 #
 # To generate markdown reports from cached data:
-#   ./generate_report.sh miekeuyt 2025/07/01 2025/10/01
+#   ./generate_report.sh --username miekeuyt 2025/07/01 2025/10/01
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/utils.sh"
 
-# Parse -f/--force-refresh flag
+# Load environment variables from .env.local if it exists
+if [ -f "$SCRIPT_DIR/../.env.local" ]; then
+  source "$SCRIPT_DIR/../.env.local"
+fi
+
+# Parse flags
 FORCE_REFRESH=""
+USERNAME=""
 POSITIONAL_ARGS=()
-for arg in "$@"; do
-  case $arg in
+while [[ $# -gt 0 ]]; do
+  case $1 in
     -f|--force-refresh)
       FORCE_REFRESH="-f"
+      shift
+      ;;
+    --username)
+      USERNAME="$2"
+      shift 2
       ;;
     *)
-      POSITIONAL_ARGS+=("$arg")
+      POSITIONAL_ARGS+=("$1")
+      shift
       ;;
   esac
 done
@@ -31,12 +44,19 @@ done
 # Initialize database
 "$SCRIPT_DIR/database/db_init.sh"
 
-USERNAME=${POSITIONAL_ARGS[0]:-${GITHUB_USERNAME:-}}
+# Use provided username or fall back to env var
+USERNAME=${USERNAME:-${GITHUB_USERNAME:-}}
 
-# Detect if second arg is a date or months_back
-ARG2="${POSITIONAL_ARGS[1]:-}"
-ARG3="${POSITIONAL_ARGS[2]:-}"
-ARG4="${POSITIONAL_ARGS[3]:-}"
+if [ -z "$USERNAME" ]; then
+  echo "Error: GitHub username not provided" >&2
+  echo "Usage: $0 [--username <github_username>] [-f] <months_back|start_date> [end_date]" >&2
+  echo "  Provide --username flag or set GITHUB_USERNAME environment variable" >&2
+  exit 1
+fi
+
+# Detect if first arg is a date or months_back
+ARG2="${POSITIONAL_ARGS[0]:-}"
+ARG3="${POSITIONAL_ARGS[1]:-}"
 
 if [[ "$ARG2" =~ ^[0-9]{4}[/-][0-9]{2}[/-][0-9]{2}$ ]]; then
   # Date range mode
@@ -69,7 +89,7 @@ fi
 
 while IFS= read -r repo; do
   REPOS+=("$repo")
-done < <("$SCRIPT_DIR/api/fetch_repos.sh" $FORCE_REFRESH "$USERNAME" "$MONTHS_FOR_REPOS")
+done < <("$SCRIPT_DIR/api/fetch_repos.sh" $FORCE_REFRESH --username "$USERNAME" "$MONTHS_FOR_REPOS")
 
 for repo in "${REPOS[@]}"; do
   echo "Processing $repo..."

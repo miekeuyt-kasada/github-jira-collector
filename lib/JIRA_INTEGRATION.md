@@ -6,7 +6,7 @@ This module provides caching and API integration with Jira Cloud to fetch ticket
 
 ### 1. Create Jira API Token
 
-1. Go to https://id.atlassian.com/manage-profile/security/api-tokens
+1. Go to <https://id.atlassian.com/manage-profile/security/api-tokens>
 2. Click "Create API token"
 3. Give it a name (e.g., "Brag Doc Generator")
 4. Copy the token
@@ -44,23 +44,20 @@ export JIRA_CHAPTER_FIELD JIRA_CHAPTER_ALT_FIELD JIRA_SERVICE_FIELD JIRA_SERVICE
 
 ### 4. Initialize History Table
 
-Run the migration to add the history table:
-
-```bash
-./github-summary/scripts/database/migrations/migrate_add_jira_history.sh
-```
+The history table is created automatically when you run `./lib/database/jira_init.sh`.
 
 This adds the `jira_ticket_history` table for caching JIRA changelog data.
 
 ### 5. Discover Custom Fields (Optional)
 
-Run the discovery script to find your Jira instance's epic field ID:
+Run the discovery script to find your Jira instance's custom field IDs:
 
 ```bash
-./github-summary/scripts/api/discover_jira_fields.sh
+./lib/api/discover_jira_fields.sh
 ```
 
 This will output all custom field IDs for your Jira instance. Look for fields like:
+
 - Epic Link
 - Epic Name
 - Sprint
@@ -83,6 +80,7 @@ SQLite database at `.cache/jira_tickets.db` caches ticket metadata and history:
 - **Open tickets**: Cached for 24 hours (TTL)
 
 Schema includes:
+
 - Basic fields: `summary`, `description`, `status`, `issue_type`, `priority`
 - People: `assignee`, `reporter` (with account IDs)
 - Relationships: `epic_key`, `epic_name`, `epic_title`, `parent_key`
@@ -97,6 +95,7 @@ Caches JIRA changelog for tracking ticket changes over time:
 - **Open tickets**: History refetched on each request (status might change)
 
 Schema includes:
+
 - `ticket_key`: Ticket identifier (e.g., VIS-454)
 - `field_name`: Field that changed (e.g., status, assignee)
 - `old_value`, `new_value`: Before/after values
@@ -104,12 +103,14 @@ Schema includes:
 - `changed_by`: User who made the change
 
 **Use cases:**
+
 - Track when tickets moved to "Done"
 - Detect blocked periods (status = "Waiting", "Blocked")
 - Calculate cycle time (Created → In Progress → Done)
 - Historical queries ("What was this ticket's status on Dec 1?")
 
 **Smart Field Merging:**
+
 - **Chapter/Service**: Intelligently merges values from both primary and alternative fields
   - Uses whichever field has data
   - Filters out "Template Only" values
@@ -119,21 +120,26 @@ Schema includes:
 ### Scripts
 
 1. **`api/discover_jira_fields.sh`** - One-time setup to find custom field IDs
-2. **`database/jira_init.sh`** - Initialize the SQLite database
-3. **`database/jira_helpers.sh`** - Helper functions for caching and queries
-4. **`api/get_jira_ticket.sh`** - Fetch and cache tickets from Jira API
+2. **`api/get_jira_ticket.sh`** - Fetch and cache single ticket from Jira API
+3. **`api/fetch_all_github_tickets.sh`** - Batch fetch all tickets from GitHub PRs
+4. **`api/show_jira_stats.sh`** - Display statistics about cached tickets
+5. **`api/harvest_jira_custom_fields.sh`** - Harvest custom fields via API
+6. **`api/harvest_jira_with_cookies.sh`** - Harvest custom fields via browser cookies
+7. **`database/jira_init.sh`** - Initialize the SQLite database
+8. **`database/jira_helpers.sh`** - Helper functions for caching and queries
 
 ## Usage
 
 ### Fetch Single Ticket
 
 ```bash
-./github-summary/scripts/api/get_jira_ticket.sh VIS-454
+./lib/api/get_jira_ticket.sh VIS-454
 ```
 
 **Automatic history caching:** If the ticket is closed (Done/Resolved/Closed), the script automatically fetches and caches its changelog. This is a one-time operation — subsequent calls use the cached history.
 
 Output (JSON):
+
 ```json
 [
   {
@@ -151,7 +157,13 @@ Output (JSON):
 ### Fetch Multiple Tickets
 
 ```bash
-./github-summary/scripts/api/get_jira_ticket.sh VIS-454 VIS-455 VIS-456
+./lib/api/get_jira_ticket.sh VIS-454 VIS-455 VIS-456
+
+# Or fetch all tickets from GitHub PRs in batches
+./lib/api/fetch_all_github_tickets.sh
+
+# View statistics
+./lib/api/show_jira_stats.sh
 ```
 
 ### Using Helper Functions
@@ -159,7 +171,7 @@ Output (JSON):
 Source the helpers in your scripts:
 
 ```bash
-source ./github-summary/scripts/database/jira_helpers.sh
+source ./lib/database/jira_helpers.sh
 
 # Check if ticket metadata is cached
 if is_jira_cached "VIS-454"; then
@@ -221,6 +233,7 @@ GET $JIRA_BASE_URL/rest/api/3/issue/{ticketKey}?fields=...
 ### Fields Fetched
 
 **Standard Fields:**
+
 - `summary` - Issue title
 - `description` - Issue body (Atlassian Document Format, converted to plain text)
 - `status` - Current status
@@ -234,8 +247,9 @@ GET $JIRA_BASE_URL/rest/api/3/issue/{ticketKey}?fields=...
 - `created`, `updated`, `resolutiondate` - Timestamps
 
 **Custom Fields (configurable via environment variables):**
+
 - `$JIRA_EPIC_FIELD` - Epic Link (default: `customfield_10009`) - VIS-98
-- `$JIRA_EPIC_NAME_FIELD` - Epic Name (default: `customfield_10008`) - "Threat Sessions MVP" 
+- `$JIRA_EPIC_NAME_FIELD` - Epic Name (default: `customfield_10008`) - "Threat Sessions MVP"
 - `$JIRA_SPRINT_FIELD` - Sprint (default: `customfield_10007`)
 - `$JIRA_STORY_POINTS_FIELD` - Story Points (default: `customfield_11004`)
 - `$JIRA_CHAPTER_FIELD` - Chapter primary (default: `customfield_11782`)
@@ -267,30 +281,41 @@ curl -u "$JIRA_EMAIL:$JIRA_API_TOKEN" "$JIRA_BASE_URL/rest/api/3/myself"
 Run the discovery script to find the correct field ID for your instance:
 
 ```bash
-./github-summary/scripts/api/discover_jira_fields.sh
+./lib/api/discover_jira_fields.sh
+```
+
+Alternatively, harvest all custom fields to see which ones contain data:
+
+```bash
+./lib/api/harvest_jira_custom_fields.sh
 ```
 
 ## Helper Scripts
 
-### Get Blocked Time
+### Query Jira Data
 
-Calculate how many days a ticket was in blocked status during a date range:
+Query cached Jira data by epic, status, or other fields:
 
 ```bash
-./github-summary/scripts/analysis/get_jira_blocked_time.sh VIS-454 2025-10-01 2025-11-01
+# Query by epic
+./lib/database/query_jira_data.sh --epic VIS-98
+
+# Query by status
+./lib/database/query_jira_data.sh --status Done
+
+# Get statistics
+./lib/api/show_jira_stats.sh
 ```
 
-Output: Number of days (e.g., `15`)
+### Harvest Custom Fields
 
-**Uses cached history when available** — if the ticket is closed and history is cached, no API calls are made.
+If you need to discover what custom fields are populated in your tickets:
 
-**Used by:** `analyze_pr_effort.sh` automatically uses this to subtract blocked time from PR effort calculations.
+```bash
+# Using API token
+./lib/api/harvest_jira_custom_fields.sh
 
-## Future Integration
-
-The enrichment and clustering scripts are available but not yet integrated into the main pipeline:
-
-- `compose/enrich_with_jira.sh` - Enrich brag docs with Jira metadata
-- `steps/cluster_brag_items.sh` - Cluster related items by epic/ticket
-
-These will be integrated after the Jira integration is tested and working.
+# Or using browser cookies (for expanded permissions)
+export JIRA_COOKIES='your-cookie-string'
+./lib/api/harvest_jira_with_cookies.sh
+```

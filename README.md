@@ -18,34 +18,55 @@ A shell-based toolkit for collecting GitHub activity (PRs, commits) and enrichin
 - **jq** — `brew install jq` or `apt-get install jq`
 - **Authenticated** — Run `gh auth login` first
 
+### Environment Setup
+
+Create `.env.local` in the project root:
+
+```bash
+# Required for GitHub
+GITHUB_USERNAME=your-github-username
+
+# Optional - for JIRA enrichment
+JIRA_EMAIL=your-email@domain.com
+JIRA_API_TOKEN=your-jira-token
+JIRA_BASE_URL=https://your-org.atlassian.net
+```
+
+Get JIRA API token: <https://id.atlassian.com/manage-profile/security/api-tokens>
+
 ### Basic Usage
 
 ```bash
-# Fetch GitHub data for the last 6 months
 cd lib
-./get_github_data.sh your-github-username 6
 
-# Generate markdown report
-./generate_report.sh your-github-username 2025-08-01 2026-02-01
+# 1. Fetch GitHub data (uses GITHUB_USERNAME from .env.local)
+./get_github_data.sh 6                                    # Last 6 months
+./get_github_data.sh --username other-user 6              # Or explicit username
+./get_github_data.sh 2025-07-01 2025-12-31                # Date range
+
+# 2. Fetch JIRA data (enriches PRs with ticket metadata)
+./get_jira_data.sh                                        # Fetches all tickets from PRs
+./get_jira_data.sh --limit 10                             # Test with 10 tickets
+
+# 3. Generate markdown report
+./generate_report.sh 2025-08-01 2026-02-01                # Uses GITHUB_USERNAME
+./generate_report.sh --username other-user 2025-08-01 2026-02-01
+
+# 4. Query data as JSON
+./database/query_month_data.sh 2025-08-01 2026-02-01      # GitHub data
+./database/query_jira_data.sh --epic VIS-98               # JIRA data by epic
 ```
 
-**Output**: `generated/your-github-username-commits-2025-08-01_2026-02-01.md`
-
-### Date Range Mode
-
-```bash
-# Fetch data for specific date range
-./get_github_data.sh your-github-username 2025-07-01 2025-12-31
-
-# Generate report for same range
-./generate_report.sh your-github-username 2025-07-01 2025-12-31
-```
+**Output**: `generated/your-username-commits-2025-08-01_2026-02-01.md`
 
 ### Force Refresh
 
 ```bash
 # Clear repo cache and refetch everything
-./get_github_data.sh -f your-github-username 6
+./get_github_data.sh -f 6
+
+# Force refresh JIRA data (ignores cache)
+./get_jira_data.sh --force
 ```
 
 ---
@@ -139,10 +160,17 @@ source .env.local
 export JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL
 ```
 
-1. Fetch a ticket:
+1. Fetch tickets:
 
 ```bash
+# Fetch all tickets referenced in GitHub PRs
+./lib/get_jira_data.sh
+
+# Or fetch a specific ticket
 ./lib/api/get_jira_ticket.sh VIS-454
+
+# View statistics
+./lib/api/show_jira_stats.sh
 ```
 
 ### Jira Custom Fields
@@ -166,12 +194,16 @@ lib/
 ├── utils.sh                    # Date/duration helpers (business days logic)
 │
 ├── api/
-│   ├── fetch_repos.sh          # Discover repos with user contributions
-│   ├── get_prs.sh              # Fetch PRs for a repo
-│   ├── get_pr_commits.sh       # Fetch commits within PRs
-│   ├── get_direct_commits.sh   # Fetch commits not in PRs
-│   ├── get_jira_ticket.sh      # Fetch Jira ticket metadata
-│   └── discover_jira_fields.sh # Find custom field IDs
+│   ├── fetch_repos.sh                  # Discover repos with user contributions
+│   ├── get_prs.sh                      # Fetch PRs for a repo
+│   ├── get_pr_commits.sh               # Fetch commits within PRs
+│   ├── get_direct_commits.sh           # Fetch commits not in PRs
+│   ├── get_jira_ticket.sh              # Fetch single Jira ticket metadata
+│   ├── fetch_all_github_tickets.sh     # Batch fetch all tickets from GitHub PRs
+│   ├── discover_jira_fields.sh         # Find custom field IDs
+│   ├── harvest_jira_custom_fields.sh   # Harvest all custom fields (using API token)
+│   ├── harvest_jira_with_cookies.sh    # Harvest custom fields (using browser cookies)
+│   └── show_jira_stats.sh              # Display statistics about cached Jira tickets
 │
 ├── database/
 │   ├── db_init.sh              # Initialize GitHub cache DB
@@ -240,6 +272,9 @@ sqlite3 lib/.cache/github_data.db \
    FROM prs 
    WHERE jira_ticket IS NOT NULL 
    GROUP BY jira_ticket;"
+
+# View Jira ticket statistics
+./lib/api/show_jira_stats.sh
 ```
 
 ### Analyze PR Duration
@@ -264,6 +299,23 @@ sqlite3 lib/.cache/jira_tickets.db \
    WHERE ticket_key = 'VIS-454' 
      AND field_name = 'status' 
    ORDER BY changed_at;"
+```
+
+### Jira Utility Scripts
+
+```bash
+# View cached Jira ticket statistics (by status, type, epic, etc.)
+./lib/api/show_jira_stats.sh
+
+# Fetch all tickets referenced in GitHub PRs (batched)
+./lib/api/fetch_all_github_tickets.sh
+
+# Harvest custom field data from Jira API
+./lib/api/harvest_jira_custom_fields.sh
+
+# Alternative: Harvest using browser cookies (when API token insufficient)
+export JIRA_COOKIES='your-browser-cookies'
+./lib/api/harvest_jira_with_cookies.sh
 ```
 
 ---
@@ -415,6 +467,25 @@ Jira instances vary — run the discovery script:
 ```
 
 Look for fields named "Epic Link", "Epic Name", etc., and update `.env.local`.
+
+### Custom field discovery
+
+If you need to find all custom fields used in your tickets:
+
+```bash
+# Using API token
+./lib/api/harvest_jira_custom_fields.sh
+
+# If API token has insufficient permissions, use browser cookies
+# 1. Open Jira in browser
+# 2. Open DevTools (F12) → Network tab
+# 3. Copy cookies from any request (Copy as cURL)
+# 4. Export the cookie string:
+export JIRA_COOKIES='your-cookie-string'
+./lib/api/harvest_jira_with_cookies.sh
+```
+
+This analyzes all tickets referenced in your GitHub PRs and shows which custom fields contain data.
 
 ---
 

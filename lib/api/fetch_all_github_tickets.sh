@@ -7,6 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GITHUB_DB="$SCRIPT_DIR/../.cache/github_data.db"
 
+# Load environment variables from .env.local if it exists
+if [ -f "$SCRIPT_DIR/../../.env.local" ]; then
+  source "$SCRIPT_DIR/../../.env.local"
+fi
+
 # Check if GitHub database exists
 if [ ! -f "$GITHUB_DB" ]; then
   echo "❌ Error: GitHub database not found at $GITHUB_DB" >&2
@@ -17,8 +22,7 @@ fi
 # Check Jira environment
 if [ -z "${JIRA_EMAIL:-}" ] || [ -z "${JIRA_API_TOKEN:-}" ] || [ -z "${JIRA_BASE_URL:-}" ]; then
   echo "❌ Error: Required Jira environment variables not set" >&2
-  echo "Please set: JIRA_EMAIL, JIRA_API_TOKEN, JIRA_BASE_URL" >&2
-  echo "Run: source .env.local && export JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL" >&2
+  echo "Please add to .env.local: JIRA_EMAIL, JIRA_API_TOKEN, JIRA_BASE_URL" >&2
   exit 1
 fi
 

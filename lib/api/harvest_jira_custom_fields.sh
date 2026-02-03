@@ -5,16 +5,21 @@
 
 set -euo pipefail
 
+# Load environment variables from .env.local if it exists
+if [ -f "$(dirname "$0")/../../.env.local" ]; then
+  source "$(dirname "$0")/../../.env.local"
+fi
+
 # Check required environment variables
 if [ -z "${JIRA_EMAIL:-}" ] || [ -z "${JIRA_API_TOKEN:-}" ] || [ -z "${JIRA_BASE_URL:-}" ]; then
   echo "❌ Error: Required environment variables not set"
   echo ""
-  echo "Please set the following in .env.local:"
+  echo "Please add to .env.local:"
   echo "  JIRA_EMAIL=your-email@kasada.io"
   echo "  JIRA_API_TOKEN=your-api-token"
   echo "  JIRA_BASE_URL=https://kasada.atlassian.net"
   echo ""
-  echo "Then run: source .env.local && export JIRA_EMAIL JIRA_API_TOKEN JIRA_BASE_URL"
+  echo "Get API token: https://id.atlassian.com/manage-profile/security/api-tokens"
   exit 1
 fi
 
