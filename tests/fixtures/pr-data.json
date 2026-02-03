@@ -1,0 +1,53 @@
+{
+  "prs": [
+    {
+      "repo": "acme/portal",
+      "pr_number": 100,
+      "title": "Fixed SonarQube exclusions",
+      "jira_ticket": "VIS-100",
+      "description": "Updated sonar exclusion patterns",
+      "state": "closed",
+      "created_at": "2025-09-01T10:00:00Z",
+      "closed_at": "2025-09-05T15:00:00Z",
+      "merged_at": "2025-09-05T15:00:00Z",
+      "first_commit_date": "2025-09-01T10:00:00Z",
+      "last_commit_date": "2025-09-04T14:00:00Z",
+      "commits": [
+        {
+          "sha": "sonar123abc",
+          "date": "2025-09-01T10:00:00Z",
+          "message": "Fix exclusion patterns"
+        }
+      ]
+    },
+    {
+      "repo": "acme/portal",
+      "pr_number": 200,
+      "title": "PROJ-999: Database migration script",
+      "jira_ticket": "PROJ-999",
+      "description": "Migration for new schema",
+      "state": "closed",
+      "created_at": "2025-09-10T08:00:00Z",
+      "closed_at": "2025-09-12T12:00:00Z",
+      "merged_at": "2025-09-12T12:00:00Z",
+      "first_commit_date": "2025-09-10T08:00:00Z",
+      "last_commit_date": "2025-09-11T18:00:00Z",
+      "commits": [
+        {
+          "sha": "migrate456def",
+          "date": "2025-09-10T08:00:00Z",
+          "message": "Add migration script"
+        },
+        {
+          "sha": "migrate789ghi",
+          "date": "2025-09-11T18:00:00Z",
+          "message": "Add rollback support"
+        }
+      ]
+    }
+  ],
+  "direct_commits": []
+}
+
+
+

@@ -1,0 +1,141 @@
+{
+  "prs": [
+    {
+      "repo": "acme/portal",
+      "pr_number": 123,
+      "title": "VIS-454: Fix toast notification styling",
+      "jira_ticket": "VIS-454",
+      "description": "Updated toast component to match design system specs",
+      "state": "closed",
+      "created_at": "2025-08-01T10:00:00Z",
+      "closed_at": "2025-08-05T15:30:00Z",
+      "merged_at": "2025-08-05T15:30:00Z",
+      "first_commit_date": "2025-08-01T10:00:00Z",
+      "last_commit_date": "2025-08-04T14:00:00Z",
+      "commits": [
+        {
+          "sha": "abc123def456789",
+          "date": "2025-08-01T10:00:00Z",
+          "message": "Initial toast component refactor"
+        },
+        {
+          "sha": "def456abc789012",
+          "date": "2025-08-04T14:00:00Z",
+          "message": "Apply PR feedback, add tests"
+        }
+      ]
+    },
+    {
+      "repo": "acme/portal",
+      "pr_number": 456,
+      "title": "Remove deprecated sidebar component",
+      "jira_ticket": null,
+      "description": null,
+      "state": "closed",
+      "created_at": "2025-08-10T09:00:00Z",
+      "closed_at": "2025-08-12T11:00:00Z",
+      "merged_at": "2025-08-12T11:00:00Z",
+      "first_commit_date": "2025-08-10T09:00:00Z",
+      "last_commit_date": "2025-08-11T16:00:00Z",
+      "commits": [
+        {
+          "sha": "ghi789jkl012345",
+          "date": "2025-08-10T09:00:00Z",
+          "message": "Remove old sidebar, update imports"
+        },
+        {
+          "sha": "jkl012mno345678",
+          "date": "2025-08-11T16:00:00Z",
+          "message": "Clean up feature flag references"
+        }
+      ]
+    },
+    {
+      "repo": "acme/api",
+      "pr_number": 789,
+      "title": "CORS-1234: Add rate limiting to auth endpoints",
+      "jira_ticket": "CORS-1234",
+      "description": "Implements configurable rate limiting for login and token refresh endpoints",
+      "state": "closed",
+      "created_at": "2025-08-15T08:00:00Z",
+      "closed_at": "2025-08-18T10:00:00Z",
+      "merged_at": "2025-08-18T10:00:00Z",
+      "first_commit_date": "2025-08-15T08:00:00Z",
+      "last_commit_date": "2025-08-17T17:00:00Z",
+      "commits": [
+        {
+          "sha": "mno345pqr678901",
+          "date": "2025-08-15T08:00:00Z",
+          "message": "Add rate limiter middleware"
+        },
+        {
+          "sha": "pqr678stu901234",
+          "date": "2025-08-17T17:00:00Z",
+          "message": "Add configuration options and tests"
+        }
+      ]
+    },
+    {
+      "repo": "acme/portal",
+      "pr_number": 999,
+      "title": "Abandoned PR - closed without merge",
+      "jira_ticket": null,
+      "description": "PR was closed in favor of another approach",
+      "state": "closed",
+      "created_at": "2025-08-25T10:00:00Z",
+      "closed_at": "2025-08-26T12:00:00Z",
+      "merged_at": null,
+      "first_commit_date": "2025-08-25T10:00:00Z",
+      "last_commit_date": "2025-08-25T11:00:00Z",
+      "commits": [
+        {
+          "sha": "abandoned1234567",
+          "date": "2025-08-25T10:00:00Z",
+          "message": "Initial attempt (abandoned)"
+        }
+      ]
+    },
+    {
+      "repo": "acme/portal",
+      "pr_number": 1000,
+      "title": "Open PR still in progress",
+      "jira_ticket": "VIS-999",
+      "description": "Work in progress",
+      "state": "open",
+      "created_at": "2025-08-28T09:00:00Z",
+      "closed_at": null,
+      "merged_at": null,
+      "first_commit_date": "2025-08-28T09:00:00Z",
+      "last_commit_date": "2025-08-29T14:00:00Z",
+      "commits": [
+        {
+          "sha": "wip123456789012",
+          "date": "2025-08-28T09:00:00Z",
+          "message": "WIP: Initial implementation"
+        },
+        {
+          "sha": "wip789012345678",
+          "date": "2025-08-29T14:00:00Z",
+          "message": "WIP: Add tests"
+        }
+      ]
+    }
+  ],
+  "direct_commits": [
+    {
+      "sha": "stu901vwx234567",
+      "repo": "acme/docs",
+      "date": "2025-08-20T14:00:00Z",
+      "message": "Update API documentation for rate limiting"
+    },
+    {
+      "sha": "vwx234yza567890",
+      "repo": "acme/infra",
+      "date": "2025-08-22T10:00:00Z",
+      "message": "Bump nginx version in docker-compose"
+    }
+  ]
+}
+
+
+
