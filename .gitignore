@@ -1,0 +1,10 @@
+# Environment files
+.env
+.env.local
+
+# Cache directory
+.cache/
+lib/.cache/
+
+# Test artifacts
+.bats_results/
