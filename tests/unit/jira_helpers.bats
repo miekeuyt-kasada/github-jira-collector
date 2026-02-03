@@ -7,7 +7,7 @@ setup() {
   export DB_PATH="$TEST_CACHE_DIR/jira_tickets.db"
   
   # Source the helpers (with mocked paths)
-  export SCRIPT_DIR="$BATS_TEST_DIRNAME/../../github-summary/scripts/database"
+  export SCRIPT_DIR="$BATS_TEST_DIRNAME/../../lib/database"
   export CACHE_DIR="$TEST_CACHE_DIR"
   
   # Initialize test database (schema must match jira_init.sh)
