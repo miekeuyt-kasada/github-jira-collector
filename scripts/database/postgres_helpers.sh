@@ -146,6 +146,9 @@ pg_insert_brag_item() {
   local commit_shas_json=$(echo "$item_json" | jq -c '.commitShas // []')
   local state=$(echo "$item_json" | jq -r '.state // "null"')
   local repo=$(echo "$item_json" | jq -r '.repo // "null"')
+  local epic_key=$(echo "$item_json" | jq -r '.epicKey // "null"')
+  local epic_name=$(echo "$item_json" | jq -r '.epicName // "null"' | sed "s/'/''/g")
+  local effort_score=$(echo "$item_json" | jq -r '.effortScore // "null"')
   
   # Compute hash for deduplication
   local commit_shas_hash
@@ -159,6 +162,7 @@ pg_insert_brag_item() {
   local sql="INSERT INTO brag_items (
     achievement, dates, company_goals, growth_areas, outcomes, impact,
     pr_id, ticket_no, commit_shas, commit_shas_hash, state, repo, month,
+    epic_key, epic_name, effort_score,
     created_at, updated_at
   ) VALUES (
     '$achievement',
@@ -174,6 +178,9 @@ pg_insert_brag_item() {
     $([ "$state" = "null" ] && echo "NULL" || echo "'$state'"),
     $([ "$repo" = "null" ] && echo "NULL" || echo "'$repo'"),
     '$month',
+    $([ "$epic_key" = "null" ] && echo "NULL" || echo "'$epic_key'"),
+    $([ "$epic_name" = "null" ] && echo "NULL" || echo "'$epic_name'"),
+    $([ "$effort_score" = "null" ] && echo "NULL" || echo "$effort_score"),
     NOW(),
     NOW()
   )
@@ -189,6 +196,9 @@ pg_insert_brag_item() {
     commit_shas = EXCLUDED.commit_shas,
     state = EXCLUDED.state,
     repo = COALESCE(EXCLUDED.repo, brag_items.repo),
+    epic_key = EXCLUDED.epic_key,
+    epic_name = EXCLUDED.epic_name,
+    effort_score = EXCLUDED.effort_score,
     updated_at = NOW()
   RETURNING id;"
   

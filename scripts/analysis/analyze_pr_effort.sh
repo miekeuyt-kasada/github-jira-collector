@@ -754,11 +754,26 @@ echo "   - Bonus work score: $bonus_work_score"
 echo ""
 echo "**Overall Effort Estimation:**"
 
-# Calculate composite effort score
-# Formula: (adjusted_days * 10) + complexity_score + diff_complexity + pr_complexity + (bonus_work_score * 2)
-composite_score=$(echo "scale=0; ($adjusted_days * 10) + $complexity_score + $diff_complexity + $pr_complexity + ($bonus_work_score * 2)" | bc | cut -d'.' -f1)
+# Calculate composite effort score with logarithmic timeline scaling
+# Formula: log₂(adjusted_days + 1) * 15 + complexity_score + diff_complexity + pr_complexity + (bonus_work_score * 2)
+# Then cap at 100 to keep scores bounded
 
-echo "   - Composite effort score: $composite_score"
+# Calculate timeline component using logarithmic scale
+timeline_component=$(echo "scale=2; l(($adjusted_days + 1)) / l(2) * 15" | bc -l | cut -d'.' -f1)
+
+# Calculate raw composite score
+raw_score=$(echo "scale=0; $timeline_component + $complexity_score + $diff_complexity + $pr_complexity + ($bonus_work_score * 2)" | bc | cut -d'.' -f1)
+
+# Cap at 100
+if [ "$raw_score" -gt 100 ]; then
+  composite_score=100
+else
+  composite_score=$raw_score
+fi
+
+echo "   - Timeline component (log scale): $timeline_component"
+echo "   - Raw composite score: $raw_score"
+echo "   - Final effort score (capped at 100): $composite_score"
 echo ""
 
 # Categorize effort level
@@ -768,12 +783,10 @@ if [ "$composite_score" -lt 30 ]; then
 elif [ "$composite_score" -lt 80 ]; then
   effort_level="Medium"
   effort_desc="Moderate complexity, some investigation/refinement"
-elif [ "$composite_score" -lt 150 ]; then
+else
+  # Changed threshold from 150 to 100 since we cap at 100
   effort_level="High"
   effort_desc="Complex work with significant debugging, refactoring, or scope expansion"
-else
-  effort_level="Very High"
-  effort_desc="Extensive effort with major complexity, investigation, or bonus work"
 fi
 
 echo "   **Effort Level: $effort_level**"
