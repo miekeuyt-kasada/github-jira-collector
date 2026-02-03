@@ -11,7 +11,7 @@ closed/merged PRs and their commits.
 
 ### 1. `db_init.sh` (54 lines)
 
-- Initializes SQLite database at `.cache/github_report.db`
+- Initializes SQLite database at `.cache/github_data.db`
 - Creates three tables: `prs`, `pr_commits`, `direct_commits`
 - Adds performance indexes
 - Idempotent (safe to run multiple times)
@@ -32,7 +32,7 @@ closed/merged PRs and their commits.
 
 ## Files Modified
 
-### 1. `generate_report.sh` (3 lines changed)
+### 1. `get_github_data.sh` (3 lines changed)
 
 - Added database initialization call
 - Sources db_helpers.sh
@@ -115,7 +115,7 @@ format detection (cached vs API) ✓ Bash syntax validation
 No changes required from user perspective:
 
 ```bash
-./generate_report.sh miekeuyt 6
+./get_github_data.sh miekeuyt 6
 ```
 
 **First run**: Fetches from GitHub, populates cache **Subsequent runs**: Uses cache for closed PRs, fetches only
@@ -128,19 +128,19 @@ open/new PRs
 ### View cache contents
 
 ```bash
-sqlite3 ../.cache/github_report.db "SELECT repo, pr_number, state_pretty, duration_formatted FROM prs"
+sqlite3 ../.cache/github_data.db "SELECT repo, pr_number, state_pretty, duration_formatted FROM prs"
 ```
 
 ### Clear cache
 
 ```bash
-rm ../.cache/github_report.db
-./generate_report.sh miekeuyt 6  # Rebuilds cache
+rm ../.cache/github_data.db
+./get_github_data.sh miekeuyt 6  # Rebuilds cache
 ```
 
 ### Cache location
 
-`.cache/github_report.db` (relative to scripts directory)
+`.cache/github_data.db` (relative to scripts directory)
 
 ## Future Enhancements
 

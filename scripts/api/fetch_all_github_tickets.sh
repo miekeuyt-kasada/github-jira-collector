@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GITHUB_DB="$SCRIPT_DIR/../.cache/github_report.db"
+GITHUB_DB="$SCRIPT_DIR/../.cache/github_data.db"
 
 # Check if GitHub database exists
 if [ ! -f "$GITHUB_DB" ]; then

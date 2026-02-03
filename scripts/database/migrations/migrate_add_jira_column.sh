@@ -3,7 +3,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CACHE_DIR="$SCRIPT_DIR/../.cache"
-DB_PATH="$CACHE_DIR/github_report.db"
+DB_PATH="$CACHE_DIR/github_data.db"
 
 if [ ! -f "$DB_PATH" ]; then
   echo "No database found at $DB_PATH - nothing to migrate"

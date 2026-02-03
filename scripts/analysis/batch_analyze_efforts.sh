@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CACHE_DIR="$SCRIPT_DIR/../.cache"
-GITHUB_DB="$CACHE_DIR/github_report.db"
+GITHUB_DB="$CACHE_DIR/github_data.db"
 
 REPO=${1:-}
 START_DATE=${2:-}

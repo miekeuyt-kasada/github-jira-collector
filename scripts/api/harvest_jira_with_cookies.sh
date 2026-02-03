@@ -35,7 +35,7 @@ JIRA_BASE_URL="${JIRA_BASE_URL:-https://kasada.atlassian.net}"
 CLOUD_ID="${JIRA_CLOUD_ID:-b633e431-9232-422a-8a3e-097525c8a8fb}"
 
 # Get database path
-DB_PATH="${1:-github-summary/.cache/github_report.db}"
+DB_PATH="${1:-github-summary/.cache/github_data.db}"
 LIMIT="${2:-5}"
 
 if [ ! -f "$DB_PATH" ]; then

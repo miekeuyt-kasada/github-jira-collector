@@ -1,5 +1,5 @@
 #!/bin/bash
-# Backfill repo column from github_report.db PR data
+# Backfill repo column from github_data.db PR data
 # Usage: source .env.local && export DATABASE_URL && ./migrate_backfill_repo.sh
 
 set -e
@@ -7,7 +7,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DATABASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CACHE_DIR="$DATABASE_DIR/../.cache"
-SQLITE_DB="$CACHE_DIR/github_report.db"
+SQLITE_DB="$CACHE_DIR/github_data.db"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -42,7 +42,7 @@ fi
 
 # Check for SQLite cache
 if [ ! -f "$SQLITE_DB" ]; then
-  echo -e "${YELLOW}⚠️  No github_report.db cache found at: $SQLITE_DB${NC}"
+  echo -e "${YELLOW}⚠️  No github_data.db cache found at: $SQLITE_DB${NC}"
   echo "   Cannot backfill - repo will be populated on next enrichment run"
   exit 0
 fi

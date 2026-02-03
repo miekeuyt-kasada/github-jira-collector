@@ -267,7 +267,7 @@ the pattern detection:
 
 ```bash
 # Re-analyze recent commits
-sqlite3 github-summary/scripts/.cache/github_report.db \
+sqlite3 github-summary/scripts/.cache/github_data.db \
   "SELECT message FROM pr_commits WHERE date > '2025-06-01' ORDER BY date DESC LIMIT 200"
 ```
 

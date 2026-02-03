@@ -1,116 +1,184 @@
 #!/bin/bash
-# Generate a GitHub commit + PR report for a user
-# Usage: ./generate_report.sh [-f] <github_username> <months_back|start_date> [output_file|end_date] [output_file]
+# Generate markdown report from cached GitHub data
+# Usage: ./generate_report.sh <username> <start_date> <end_date> [output_file]
 # Examples:
-#   ./generate_report.sh miekeuyt 6                       # Last 6 months
-#   ./generate_report.sh miekeuyt 2025/07/01 2025/10/01   # Date range
-#   ./generate_report.sh -f miekeuyt 2025/12/01 2026/01/01  # Force refresh repos cache
+#   ./generate_report.sh miekeuyt 2025-07-01 2025-10-01
+#   ./generate_report.sh miekeuyt 2025-07-01 2025-10-01 custom-report.md
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/utils.sh"
+source "$SCRIPT_DIR/database/db_helpers.sh"
 
-# Parse -f/--force-refresh flag
-FORCE_REFRESH=""
-POSITIONAL_ARGS=()
-for arg in "$@"; do
-  case $arg in
-    -f|--force-refresh)
-      FORCE_REFRESH="-f"
-      ;;
-    *)
-      POSITIONAL_ARGS+=("$arg")
-      ;;
-  esac
-done
+USERNAME="${1:-}"
+DATE_START="${2:-}"
+DATE_END="${3:-}"
+OUTPUT_FILE="${4:-$SCRIPT_DIR/../generated/$USERNAME-commits-${DATE_START}_${DATE_END}.md}"
 
-# Initialize database
-"$SCRIPT_DIR/database/db_init.sh"
+if [ -z "$USERNAME" ] || [ -z "$DATE_START" ] || [ -z "$DATE_END" ]; then
+  echo "Usage: $0 <username> <start_date> <end_date> [output_file]"
+  echo "Example: $0 miekeuyt 2025-07-01 2025-10-01"
+  exit 1
+fi
 
-USERNAME=${POSITIONAL_ARGS[0]:-"ADD_USER"}
-
-# Detect if second arg is a date or months_back
-ARG2="${POSITIONAL_ARGS[1]:-}"
-ARG3="${POSITIONAL_ARGS[2]:-}"
-ARG4="${POSITIONAL_ARGS[3]:-}"
-
-if [[ "$ARG2" =~ ^[0-9]{4}[/-][0-9]{2}[/-][0-9]{2}$ ]]; then
-  # Date range mode
-  DATE_START=$(echo "$ARG2" | tr '/' '-')
-  DATE_END=$(echo "${ARG3:-$(date +%Y-%m-%d)}" | tr '/' '-')
-  OUTPUT_FILE="${ARG4:-$SCRIPT_DIR/../generated/$USERNAME-commits-${DATE_START}_${DATE_END}.md}"
-  
-  # For backward compatibility with scripts expecting DATE_BACK
-  DATE_BACK="$DATE_START"
-else
-  # Months back mode (legacy)
-  MONTHS_BACK=${ARG2:-6}
-  DATE_START=$(date -v-"${MONTHS_BACK}"m +%Y-%m-%d)
-  DATE_END=$(date +%Y-%m-%d)
-  OUTPUT_FILE="${ARG3:-$SCRIPT_DIR/../generated/$USERNAME-commits-$(date +%Y%m%d).md}"
-  DATE_BACK="$DATE_START"
+# Check database exists
+DB_PATH="$SCRIPT_DIR/.cache/github_data.db"
+if [ ! -f "$DB_PATH" ]; then
+  echo "❌ Error: Database not found at $DB_PATH"
+  echo "   Run ./get_github_data.sh first to fetch and cache data"
+  exit 1
 fi
 
 # Ensure output directory exists
 OUTPUT_DIR="$(dirname "$OUTPUT_FILE")"
 mkdir -p "$OUTPUT_DIR"
 
-# Write header
+echo "Generating report from database cache..."
+
+# Write report header
 echo "# GitHub Commits by $USERNAME" > "$OUTPUT_FILE"
 echo "## Period: $DATE_START to $DATE_END" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
-echo "Getting repositories..."
-REPOS=()
+# Get unique repos in date range
+REPOS=$(sqlite3 "$DB_PATH" <<SQL
+SELECT DISTINCT repo FROM (
+  SELECT repo FROM prs 
+  WHERE created_at >= '$DATE_START' AND created_at < '$DATE_END'
+  UNION
+  SELECT repo FROM direct_commits 
+  WHERE date >= '$DATE_START' AND date < '$DATE_END'
+)
+ORDER BY repo;
+SQL
+)
 
-# Calculate months_back for repo fetching (approximate)
-if [[ "$ARG2" =~ ^[0-9]{4}[/-][0-9]{2}[/-][0-9]{2}$ ]]; then
-  # Calculate approximate months between dates for repo fetch
-  start_epoch=$(date -j -f "%Y-%m-%d" "$DATE_START" "+%s" 2>/dev/null || date -d "$DATE_START" "+%s" 2>/dev/null)
-  now_epoch=$(date +%s)
-  months_diff=$(( (now_epoch - start_epoch) / (30 * 24 * 3600) ))
-  MONTHS_FOR_REPOS=$months_diff
-else
-  MONTHS_FOR_REPOS=$MONTHS_BACK
+if [ -z "$REPOS" ]; then
+  echo "No data found in database for date range $DATE_START to $DATE_END"
+  echo "" >> "$OUTPUT_FILE"
+  echo "_No activity found in this period._" >> "$OUTPUT_FILE"
+  echo "✅ Report generated: $OUTPUT_FILE"
+  exit 0
 fi
 
+# Process each repo
 while IFS= read -r repo; do
-  REPOS+=("$repo")
-done < <("$SCRIPT_DIR/api/fetch_repos.sh" $FORCE_REFRESH "$USERNAME" "$MONTHS_FOR_REPOS")
-
-for repo in "${REPOS[@]}"; do
-  echo "Processing $repo..."
-  repo_clean=$(echo "$repo" | tr '/' '-')
-  TMP_DIR="/tmp/github_report_${repo_clean}"
-  mkdir -p "$TMP_DIR"
-
-  COMMITS_JSON="$TMP_DIR/commits.json"
-  PRS_JSON="$TMP_DIR/prs.json"
-  REPO_OUTPUT="$TMP_DIR/output.md"
-
-  "$SCRIPT_DIR/api/get_direct_commits.sh" "$repo" "$USERNAME" "$DATE_START" "$COMMITS_JSON"
-  "$SCRIPT_DIR/api/get_prs.sh" "$repo" "$USERNAME" "$DATE_START" "$PRS_JSON"
-  "$SCRIPT_DIR/api/get_pr_commits.sh" "$repo" "$USERNAME" "$PRS_JSON" "$REPO_OUTPUT" "$COMMITS_JSON" "$DATE_START" "$DATE_END"
-
-# --- Count totals for header line (from generated output) ---
-TOTAL_UNIQUE=$(grep -oE '^### Direct Commits \([0-9]+\)' "$REPO_OUTPUT" | grep -oE '[0-9]+' | head -n1)
-TOTAL_UNIQUE=${TOTAL_UNIQUE:-0}
-
-TOTAL_PRS=$(grep -oE '^### Pull Requests \([0-9]+\)' "$REPO_OUTPUT" | grep -oE '[0-9]+' | head -n1)
-TOTAL_PRS=${TOTAL_PRS:-0}
-
-if ! [[ "$TOTAL_UNIQUE" =~ ^[0-9]+$ ]]; then TOTAL_UNIQUE=0; fi
-if ! [[ "$TOTAL_PRS" =~ ^[0-9]+$ ]]; then TOTAL_PRS=0; fi
-
-TOTAL_ITEMS=$((TOTAL_PRS + TOTAL_UNIQUE))
-
-echo "## $repo ($TOTAL_ITEMS items)" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-cat "$REPO_OUTPUT" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-
-  rm -rf "$TMP_DIR"
-done
+  [ -z "$repo" ] && continue
+  
+  echo "  Processing $repo..."
+  
+  # Count PRs
+  PR_COUNT=$(sqlite3 "$DB_PATH" <<SQL
+SELECT COUNT(*) FROM prs 
+WHERE repo='$repo' 
+  AND created_at >= '$DATE_START' 
+  AND created_at < '$DATE_END';
+SQL
+)
+  
+  # Count direct commits
+  COMMIT_COUNT=$(sqlite3 "$DB_PATH" <<SQL
+SELECT COUNT(*) FROM direct_commits 
+WHERE repo='$repo' 
+  AND date >= '$DATE_START' 
+  AND date < '$DATE_END';
+SQL
+)
+  
+  TOTAL_ITEMS=$((PR_COUNT + COMMIT_COUNT))
+  
+  echo "## $repo ($TOTAL_ITEMS items)" >> "$OUTPUT_FILE"
+  echo "" >> "$OUTPUT_FILE"
+  
+  # Write PRs section
+  if [ "$PR_COUNT" -gt 0 ]; then
+    echo "### Pull Requests ($PR_COUNT)" >> "$OUTPUT_FILE"
+    echo "" >> "$OUTPUT_FILE"
+    
+    sqlite3 -separator '|' "$DB_PATH" "SELECT pr_number, title, state, 
+       CASE WHEN merged_at IS NOT NULL THEN 1 ELSE 0 END as merged,
+       COALESCE(draft, 0) as is_draft,
+       author_span_formatted
+FROM prs 
+WHERE repo='$repo' 
+  AND created_at >= '$DATE_START' 
+  AND created_at < '$DATE_END'
+ORDER BY created_at DESC;" | while IFS='|' read -r number title state merged draft_flag duration; do
+      state_display="$state"
+      [ "$draft_flag" = "1" ] && state_display="[draft] $state"
+      [ "$merged" = "1" ] && state_display="merged"
+      
+      pr_url="https://github.com/$repo/pull/$number"
+      
+      echo "- **PR #$number**: $title" >> "$OUTPUT_FILE"
+      echo "  - Status: $state_display" >> "$OUTPUT_FILE"
+      echo "  - URL: $pr_url" >> "$OUTPUT_FILE"
+      
+      # Add duration if available
+      if [ -n "$duration" ] && [ "$duration" != "null" ] && [ "$duration" != "0m" ]; then
+        echo "  - **Duration:** $duration" >> "$OUTPUT_FILE"
+      fi
+      
+      # Add description if available (query separately to handle multiline)
+      # Remove Unicode line/paragraph separators (U+2028, U+2029) that cause editor warnings
+      description=$(sqlite3 "$DB_PATH" "SELECT description FROM prs WHERE repo='$repo' AND pr_number=$number;" | head -c 500 | sed $'s/\xe2\x80\xa8/ /g; s/\xe2\x80\xa9/ /g')
+      if [ -n "$description" ] && [ "$description" != "null" ]; then
+        echo "  ##### Description:" >> "$OUTPUT_FILE"
+        echo "  ---" >> "$OUTPUT_FILE"
+        echo '  ```' >> "$OUTPUT_FILE"
+        echo "$description" | sed 's/^/  /' >> "$OUTPUT_FILE"
+        echo '  ```' >> "$OUTPUT_FILE"
+        echo "  ---" >> "$OUTPUT_FILE"
+      fi
+      
+      # Add commit details
+      echo "  ##### Commits:" >> "$OUTPUT_FILE"
+      echo '  ```' >> "$OUTPUT_FILE"
+      
+      # Get commit count from pr_commits table
+      commit_data=$(sqlite3 -separator '|' "$DB_PATH" "SELECT COUNT(*) FROM pr_commits WHERE repo='$repo' AND pr_number=$number;")
+      if [ -n "$commit_data" ] && [ "$commit_data" -gt 0 ]; then
+        echo "    ($commit_data commits)" >> "$OUTPUT_FILE"
+        
+        # List commits
+        sqlite3 -separator '|' "$DB_PATH" "SELECT author_date, message 
+FROM pr_commits 
+WHERE repo='$repo' AND pr_number=$number 
+ORDER BY author_date;" | while IFS='|' read -r commit_date commit_msg; do
+          formatted_date=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$commit_date" "+%Y-%m-%d %H:%M" 2>/dev/null || echo "${commit_date:0:16}")
+          echo "    - **${formatted_date}** - ${commit_msg}" >> "$OUTPUT_FILE"
+        done
+      else
+        echo "    (no commit details cached)" >> "$OUTPUT_FILE"
+      fi
+      
+      echo '  ```' >> "$OUTPUT_FILE"
+      echo "" >> "$OUTPUT_FILE"
+    done
+  fi
+  
+  # Write direct commits section
+  if [ "$COMMIT_COUNT" -gt 0 ]; then
+    echo "### Direct Commits ($COMMIT_COUNT)" >> "$OUTPUT_FILE"
+    echo "" >> "$OUTPUT_FILE"
+    
+    sqlite3 -separator '|' "$DB_PATH" "SELECT sha, message, date
+FROM direct_commits 
+WHERE repo='$repo' 
+  AND date >= '$DATE_START' 
+  AND date < '$DATE_END'
+ORDER BY date DESC;" | while IFS='|' read -r sha message date; do
+      short_sha="${sha:0:7}"
+      short_msg=$(echo "$message" | head -n1 | cut -c1-80)
+      echo "- \`$short_sha\` $short_msg _(${date%T*})_" >> "$OUTPUT_FILE"
+    done
+    
+    echo "" >> "$OUTPUT_FILE"
+  fi
+  
+  echo "" >> "$OUTPUT_FILE"
+  
+done <<< "$REPOS"
 
 echo "✅ Report generated: $OUTPUT_FILE"

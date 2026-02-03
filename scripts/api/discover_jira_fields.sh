@@ -9,15 +9,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # LIMIT="${1:-5}"
 LIMIT=1000
 
-# Find the github_report.db
-DB_PATH="$SCRIPT_DIR/../../github-summary/.cache/github_report.db"
+# Find the github_data.db
+DB_PATH="$SCRIPT_DIR/../../github-summary/.cache/github_data.db"
 if [ ! -f "$DB_PATH" ]; then
-  DB_PATH="$SCRIPT_DIR/../.cache/github_report.db"
+  DB_PATH="$SCRIPT_DIR/../.cache/github_data.db"
 fi
 
 if [ ! -f "$DB_PATH" ]; then
-  echo "❌ Error: github_report.db not found" >&2
-  echo "   Expected at: github-summary/.cache/github_report.db" >&2
+  echo "❌ Error: github_data.db not found" >&2
+  echo "   Expected at: github-summary/.cache/github_data.db" >&2
   echo "" >&2
   echo "Run this from your project root, or ensure the database exists." >&2
   exit 1

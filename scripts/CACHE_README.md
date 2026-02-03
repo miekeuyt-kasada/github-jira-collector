@@ -7,7 +7,7 @@ GitHub API calls on repeated runs.
 
 ## Database Location
 
-`.cache/github_report.db` (automatically created, gitignored)
+`.cache/github_data.db` (automatically created, gitignored)
 
 ## Cache Strategy
 
@@ -57,7 +57,7 @@ The cache stores computed values to avoid recalculation:
 No changes needed — caching is automatic:
 
 ```bash
-./generate_report.sh miekeuyt 6
+./get_github_data.sh miekeuyt 6
 ```
 
 First run: fetches everything from GitHub API Second run: uses cached data for closed PRs
@@ -69,33 +69,33 @@ Output files are written to `../generated/` by default.
 View cached repos:
 
 ```bash
-sqlite3 ../.cache/github_report.db "SELECT username, since_date, COUNT(*) as repo_count FROM repos GROUP BY username, since_date"
-sqlite3 ../.cache/github_report.db "SELECT * FROM repos WHERE username='miekeuyt-kasada'"
+sqlite3 ../.cache/github_data.db "SELECT username, since_date, COUNT(*) as repo_count FROM repos GROUP BY username, since_date"
+sqlite3 ../.cache/github_data.db "SELECT * FROM repos WHERE username='miekeuyt-kasada'"
 ```
 
 View cached PRs:
 
 ```bash
-sqlite3 ../.cache/github_report.db "SELECT repo, pr_number, state_pretty, duration_formatted FROM prs"
+sqlite3 ../.cache/github_data.db "SELECT repo, pr_number, state_pretty, duration_formatted FROM prs"
 ```
 
 View PRs by Jira ticket:
 
 ```bash
-sqlite3 ../.cache/github_report.db "SELECT pr_number, title, state_pretty, jira_ticket FROM prs WHERE jira_ticket IS NOT NULL"
-sqlite3 ../.cache/github_report.db "SELECT * FROM prs WHERE jira_ticket = 'VIS-454'"
+sqlite3 ../.cache/github_data.db "SELECT pr_number, title, state_pretty, jira_ticket FROM prs WHERE jira_ticket IS NOT NULL"
+sqlite3 ../.cache/github_data.db "SELECT * FROM prs WHERE jira_ticket = 'VIS-454'"
 ```
 
 Group PRs by Jira ticket:
 
 ```bash
-sqlite3 ../.cache/github_report.db "SELECT jira_ticket, COUNT(*) as pr_count FROM prs WHERE jira_ticket IS NOT NULL GROUP BY jira_ticket"
+sqlite3 ../.cache/github_data.db "SELECT jira_ticket, COUNT(*) as pr_count FROM prs WHERE jira_ticket IS NOT NULL GROUP BY jira_ticket"
 ```
 
 Clear cache:
 
 ```bash
-rm ../.cache/github_report.db
+rm ../.cache/github_data.db
 ```
 
 ## Benefits

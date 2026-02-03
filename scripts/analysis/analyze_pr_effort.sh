@@ -10,7 +10,7 @@ API_DIR="$SCRIPT_DIR/../api"
 DB_DIR="$SCRIPT_DIR/../database"
 # Use environment variable if set, otherwise use default
 CACHE_DIR="${CACHE_DIR:-$SCRIPT_DIR/../.cache}"
-GITHUB_DB="${GITHUB_DB:-$CACHE_DIR/github_report.db}"
+GITHUB_DB="${GITHUB_DB:-$CACHE_DIR/github_data.db}"
 JIRA_DB="${JIRA_DB:-$CACHE_DIR/jira_tickets.db}"
 
 # Source utilities

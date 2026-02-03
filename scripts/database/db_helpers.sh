@@ -3,10 +3,12 @@
 
 SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 CACHE_DIR="${CACHE_DIR:-$SCRIPT_DIR/../.cache}"
-DB_PATH="${DB_PATH:-$CACHE_DIR/github_report.db}"
+DB_PATH="${DB_PATH:-$CACHE_DIR/github_data.db}"
 
 # Load utility functions for duration calculations
-source "$SCRIPT_DIR/../utils.sh"
+# Use path relative to this file's location
+DB_HELPERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$DB_HELPERS_DIR/../utils.sh"
 
 # Extract Jira ticket number from text (e.g., VIS-454, CORS-3342)
 extract_jira_ticket() {

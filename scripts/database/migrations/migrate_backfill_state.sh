@@ -1,5 +1,5 @@
 #!/bin/bash
-# Backfill state column from github_report.db
+# Backfill state column from github_data.db
 # Usage: ./migrate_backfill_state.sh
 
 MIGRATION_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,15 +11,15 @@ source "$DB_HELPERS"
 # Get the cache directory from DB_PATH
 CACHE_DIR="$(dirname "$DB_PATH")"
 BRAGDOC_DB="$DB_PATH"
-GITHUB_DB="$CACHE_DIR/github_report.db"
+GITHUB_DB="$CACHE_DIR/github_data.db"
 
 echo "════════════════════════════════════════════════════════════════"
-echo "Backfilling state from github_report.db"
+echo "Backfilling state from github_data.db"
 echo "════════════════════════════════════════════════════════════════"
 echo ""
 
 if [ ! -f "$GITHUB_DB" ]; then
-  echo "⚠️  github_report.db not found at: $GITHUB_DB"
+  echo "⚠️  github_data.db not found at: $GITHUB_DB"
   exit 1
 fi
 
@@ -34,7 +34,7 @@ TOTAL_UPDATED=0
 
 # Get all items that need state backfilled
 sqlite3 "$BRAGDOC_DB" "SELECT DISTINCT pr_id FROM brag_items WHERE pr_id IS NOT NULL AND state IS NULL;" | while read -r pr_id; do
-  # Get state from github_report.db
+  # Get state from github_data.db
   state=$(sqlite3 "$GITHUB_DB" "SELECT state FROM prs WHERE pr_number=$pr_id LIMIT 1;" 2>/dev/null)
   
   if [ -n "$state" ] && [ "$state" != "" ]; then

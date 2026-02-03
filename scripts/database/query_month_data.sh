@@ -7,7 +7,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CACHE_DIR="$SCRIPT_DIR/../.cache"
-DB_PATH="$CACHE_DIR/github_report.db"
+DB_PATH="$CACHE_DIR/github_data.db"
 
 if [ ! -f "$DB_PATH" ]; then
   echo "Error: Database not found at $DB_PATH" >&2

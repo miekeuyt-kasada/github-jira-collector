@@ -92,11 +92,13 @@ This system was built by analyzing 62 of your PRs and 100+ commit messages to de
 ### Natural Iteration vs Bonus Work
 
 **Reduced weight for fix/refactor/yeeting** (×1 instead of ×2):
+
 - "fix" = often fixing bugs you just introduced
 - "yeeting" = often removing code you just added
 - "refactor" = often refining your own new code
 
 **Only counts as bonus if**:
+
 - NOT explicitly mentioned in ticket AND
 - NOT reasonably implied by ticket type/context (e.g., testing implied for bug fixes)
 
@@ -359,7 +361,7 @@ Structured data suitable for:
 
 Requires:
 
-- Populated GitHub database (`.cache/github_report.db`)
+- Populated GitHub database (`.cache/github_data.db`)
 - Populated JIRA database (`.cache/jira_tickets.db`) for scope comparison
 - `jq` for JSON processing
 - `bc` for floating-point arithmetic

@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CACHE_DIR="$SCRIPT_DIR/../.cache"
-GITHUB_DB="$CACHE_DIR/github_report.db"
+GITHUB_DB="$CACHE_DIR/github_data.db"
 ANALYZE_SCRIPT="$SCRIPT_DIR/analyze_pr_diff_complexity.sh"
 
 MAX_PARALLEL=5  # Default: 5 concurrent jobs

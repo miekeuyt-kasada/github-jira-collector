@@ -1,6 +1,6 @@
 #!/bin/bash
-# Harvest all custom fields from Jira issues referenced in github_report.db
-# Usage: ./harvest_jira_custom_fields.sh [path/to/github_report.db] [limit]
+# Harvest all custom fields from Jira issues referenced in github_data.db
+# Usage: ./harvest_jira_custom_fields.sh [path/to/github_data.db] [limit]
 #   limit: optional, number of issues to sample (default: all)
 
 set -euo pipefail
@@ -19,7 +19,7 @@ if [ -z "${JIRA_EMAIL:-}" ] || [ -z "${JIRA_API_TOKEN:-}" ] || [ -z "${JIRA_BASE
 fi
 
 # Get database path and optional limit
-DB_PATH="${1:-github-summary/.cache/github_report.db}"
+DB_PATH="${1:-github-summary/.cache/github_data.db}"
 LIMIT="${2:-0}"
 
 if [ ! -f "$DB_PATH" ]; then
