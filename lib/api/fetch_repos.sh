@@ -18,7 +18,7 @@ for arg in "$@"; do
   esac
 done
 
-USERNAME=${POSITIONAL_ARGS[0]:-miekeuyt-kasada}
+USERNAME=${POSITIONAL_ARGS[0]:-${GITHUB_USERNAME:-}}
 MONTHS_BACK=${POSITIONAL_ARGS[1]:-5}
 SINCE=$(date -v-"${MONTHS_BACK}"m +"%Y-%m-%d")
 

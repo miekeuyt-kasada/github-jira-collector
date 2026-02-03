@@ -31,7 +31,7 @@ done
 # Initialize database
 "$SCRIPT_DIR/database/db_init.sh"
 
-USERNAME=${POSITIONAL_ARGS[0]:-"ADD_USER"}
+USERNAME=${POSITIONAL_ARGS[0]:-${GITHUB_USERNAME:-}}
 
 # Detect if second arg is a date or months_back
 ARG2="${POSITIONAL_ARGS[1]:-}"

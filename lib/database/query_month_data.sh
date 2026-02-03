@@ -15,7 +15,7 @@ if [ ! -f "$DB_PATH" ]; then
   exit 1
 fi
 
-USERNAME=${1:-"ADD_USER"}
+USERNAME=${1:-${GITHUB_USERNAME:-}}
 DATE_START=$(echo "$2" | tr '/' '-')
 DATE_END=$(echo "$3" | tr '/' '-')
 
